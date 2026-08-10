@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
@@ -83,6 +84,8 @@ class MembersView(QWidget):
         for btn in (self.edit_btn, self.approve_btn, self.reject_btn, self.suspend_btn, self.withdraw_btn, self.fee_btn):
             btn.setEnabled(self._can_manage)
             actions.addWidget(btn)
+        self.cards_btn = QPushButton("طباعة بطاقة العضوية")
+        actions.addWidget(self.cards_btn)
         layout.addLayout(actions)
 
         self.edit_btn.clicked.connect(self._on_edit)
@@ -91,6 +94,7 @@ class MembersView(QWidget):
         self.suspend_btn.clicked.connect(self._on_suspend)
         self.withdraw_btn.clicked.connect(self._on_withdraw)
         self.fee_btn.clicked.connect(self._on_record_fee)
+        self.cards_btn.clicked.connect(self._on_print_cards)
 
         self.refresh()
 
@@ -206,4 +210,28 @@ class MembersView(QWidget):
             message += "\n\nسطور تم تجاوزها:\n" + "\n".join(f"- {s}" for s in report.skipped)
         show_info(self, message, title="نتيجة الاستيراد")
         self.refresh()
+
+    def _on_print_cards(self) -> None:
+        from app.reports.pdf_export import generate_membership_cards
+
+        member = self._selected_member()
+        if member is not None:
+            members = [member]
+            default_name = f"بطاقة-عضوية-{member.full_name}.pdf"
+        else:
+            members = membership_service.list_members(self.ctx.session, status=MemberStatus.ACTIVE)
+            if not members:
+                show_error(self, "لا يوجد أعضاء نشطون لطباعة بطاقاتهم")
+                return
+            default_name = "بطاقات-العضوية.pdf"
+
+        path, _ = QFileDialog.getSaveFileName(self, "حفظ بطاقة/بطاقات العضوية", default_name, "PDF (*.pdf)")
+        if not path:
+            return
+        try:
+            generate_membership_cards(self.ctx.session, members, path)
+            show_info(self, f"تم حفظ البطاقات في: {path}")
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, f"تعذر توليد البطاقات: {exc}")
+
 

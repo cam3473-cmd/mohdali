@@ -1,7 +1,24 @@
 """عناصر واجهة مشتركة."""
 from __future__ import annotations
 
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
+
+IMAGES_DIR = Path(__file__).resolve().parent.parent / "resources" / "images"
+
+
+def load_logo_pixmap(max_height: int = 80) -> QPixmap | None:
+    """يحمّل شعار الجمعية إن وُجد ملفه في app/resources/images/logo.(png|jpg|jpeg)."""
+    for name in ("logo.png", "logo.jpg", "logo.jpeg"):
+        path = IMAGES_DIR / name
+        if path.exists():
+            pixmap = QPixmap(str(path))
+            if not pixmap.isNull():
+                return pixmap.scaledToHeight(max_height, Qt.TransformationMode.SmoothTransformation)
+    return None
 
 
 def show_error(parent, message: str, title: str = "خطأ") -> None:
@@ -57,4 +74,5 @@ class ChangePasswordDialog(QDialog):
             return
         self.result_password = pw1
         self.accept()
+
 

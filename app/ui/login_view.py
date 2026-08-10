@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButt
 
 from app.auth.service import AccountInactive, AuthService, InvalidCredentials
 from app.db.models import User
-from app.ui.common import ChangePasswordDialog, show_error
+from app.ui.common import ChangePasswordDialog, load_logo_pixmap, show_error
 
 
 class LoginDialog(QDialog):
@@ -19,7 +19,17 @@ class LoginDialog(QDialog):
         self.setMinimumWidth(360)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("<h2>جمعية البر الخيرية بمحافظة السليل</h2>"))
+
+        logo_pixmap = load_logo_pixmap(max_height=90)
+        if logo_pixmap is not None:
+            logo_label = QLabel()
+            logo_label.setPixmap(logo_pixmap)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(logo_label)
+
+        title_label = QLabel("<h2>جمعية البر الخيرية بمحافظة السليل</h2>")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title_label)
 
         form = QFormLayout()
         self.username_input = QLineEdit()
@@ -62,4 +72,5 @@ class LoginDialog(QDialog):
 
         self.authenticated_user = user
         self.accept()
+
 
