@@ -1,4 +1,20 @@
-.sass-cache/
-*.css.map
-*.sass.map
-*.scss.map
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+*.spec.bak
+
+# بيانات محلية للتطبيق (لا تُرفع لأنها بيانات الجمعية الفعلية)
+*.db
+*.sqlite3
+data/
+backups/
+
+.pytest_cache/
+.vscode/
+.idea/
+

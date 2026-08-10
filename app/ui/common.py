@@ -1,0 +1,60 @@
+"""عناصر واجهة مشتركة."""
+from __future__ import annotations
+
+from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
+
+
+def show_error(parent, message: str, title: str = "خطأ") -> None:
+    QMessageBox.critical(parent, title, message)
+
+
+def show_info(parent, message: str, title: str = "تنبيه") -> None:
+    QMessageBox.information(parent, title, message)
+
+
+def confirm(parent, message: str, title: str = "تأكيد") -> bool:
+    return QMessageBox.question(parent, title, message) == QMessageBox.StandardButton.Yes
+
+
+class ChangePasswordDialog(QDialog):
+    def __init__(self, parent=None, mandatory: bool = False):
+        super().__init__(parent)
+        self.setWindowTitle("تغيير كلمة المرور")
+        self.setModal(True)
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.new_password = QLineEdit()
+        self.new_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.confirm_password = QLineEdit()
+        self.confirm_password.setEchoMode(QLineEdit.EchoMode.Password)
+
+        form.addRow("كلمة المرور الجديدة:", self.new_password)
+        form.addRow("تأكيد كلمة المرور:", self.confirm_password)
+        layout.addLayout(form)
+
+        if mandatory:
+            layout.addWidget(QPushButton("تغيير", clicked=self._on_submit))
+        else:
+            save_btn = QPushButton("حفظ")
+            cancel_btn = QPushButton("إلغاء")
+            save_btn.clicked.connect(self._on_submit)
+            cancel_btn.clicked.connect(self.reject)
+            layout.addWidget(save_btn)
+            layout.addWidget(cancel_btn)
+
+        self.result_password: str | None = None
+
+    def _on_submit(self) -> None:
+        pw1 = self.new_password.text()
+        pw2 = self.confirm_password.text()
+        if len(pw1) < 6:
+            show_error(self, "يجب ألا تقل كلمة المرور عن 6 أحرف")
+            return
+        if pw1 != pw2:
+            show_error(self, "كلمتا المرور غير متطابقتين")
+            return
+        self.result_password = pw1
+        self.accept()
+
