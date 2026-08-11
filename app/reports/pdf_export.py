@@ -188,12 +188,13 @@ def generate_invitation_list(session, assembly: Assembly, output_path: str) -> N
     doc.build(story)
 
 
-def generate_board_report(positions: list, output_path: str) -> None:
+def generate_board_report(positions: list, output_path: str, term_end_date: str | None = None) -> None:
     """يولّد تقرير مناصب مجلس الإدارة الحالية بصيغة PDF."""
     _ensure_fonts_registered()
 
     styles = {
         "title": ParagraphStyle("title", fontName=FONT_BOLD_NAME, fontSize=16, alignment=1, spaceAfter=12),
+        "sub": ParagraphStyle("sub", fontName=FONT_NAME, fontSize=11, alignment=1, spaceAfter=10),
     }
 
     doc = SimpleDocTemplate(output_path, pagesize=A4, rightMargin=2 * cm, leftMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm)
@@ -204,12 +205,33 @@ def generate_board_report(positions: list, output_path: str) -> None:
         story.append(Spacer(1, 6))
     story.append(Paragraph(ar(ASSOCIATION_NAME), styles["title"]))
     story.append(Paragraph(ar("مجلس الإدارة — المناصب الحالية"), styles["title"]))
+    if term_end_date:
+        story.append(Paragraph(ar(f"دورة المجلس الحالية سارية حتى تاريخ: {term_end_date}"), styles["sub"]))
     story.append(Spacer(1, 8))
 
     rows = [[ar("تاريخ التعيين"), ar("المنصب"), ar("العضو"), "#"]]
     for i, pos in enumerate(positions, start=1):
         rows.append([ar(pos.start_date.isoformat() if pos.start_date else "—"), ar(pos.title), ar(pos.member.full_name), str(i)])
-    story.append(_styled_table(rows))
+    story.append(_styled_table(rows, h_align="CENTER"))
+    story.append(Spacer(1, 16))
+
+    qr_data = "|".join(
+        [ASSOCIATION_NAME, "مجلس الإدارة", f"سارٍ حتى: {term_end_date}" if term_end_date else "", date.today().isoformat()]
+    )
+    qr_size = 2.4 * cm
+    qr_widget = qr.QrCodeWidget(qr_data)
+    qr_x0, qr_y0, qr_x1, qr_y1 = qr_widget.getBounds()
+    qr_drawing = Drawing(qr_size, qr_size, transform=[qr_size / (qr_x1 - qr_x0), 0, 0, qr_size / (qr_y1 - qr_y0), 0, 0])
+    qr_drawing.add(qr_widget)
+    qr_drawing.hAlign = "CENTER"
+    story.append(qr_drawing)
+    story.append(Spacer(1, 4))
+    story.append(
+        Paragraph(
+            ar("مرجع داخلي للتحقق من هذا التقرير — لا يغني عن خطاب اعتماد المركز الوطني لتنمية القطاع غير الربحي"),
+            ParagraphStyle("qr_note", fontName=FONT_NAME, fontSize=8, alignment=1, textColor=colors.HexColor("#666666")),
+        )
+    )
 
     doc.build(story)
 
@@ -347,8 +369,8 @@ def generate_membership_cards(session, members: list[Member], output_path: str) 
     c.save()
 
 
-def _styled_table(rows: list[list[str]]) -> Table:
-    table = Table(rows, hAlign="RIGHT")
+def _styled_table(rows: list[list[str]], h_align: str = "RIGHT") -> Table:
+    table = Table(rows, hAlign=h_align)
     table.setStyle(
         TableStyle(
             [

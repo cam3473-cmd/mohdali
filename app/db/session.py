@@ -29,6 +29,10 @@ DEFAULT_BYLAW_SETTINGS: dict[str, tuple[str, str]] = {
     "majority_normal_percent": ("50", "نسبة الأغلبية العادية لاعتماد القرار (أكثر من هذه النسبة من الأصوات المصوّتة)"),
     "majority_special_percent": ("66.67", "نسبة الأغلبية الخاصة (كتعديل اللائحة الأساسية أو حل الجمعية)"),
     "max_proxies_per_holder": ("0", "الحد الأقصى لعدد التوكيلات التي يحملها العضو الواحد في الاجتماع (0 = بلا حد)"),
+    "board_term_end_date": (
+        "",
+        "تاريخ نهاية الدورة الحالية لمجلس الإدارة (وفق خطاب اعتماد المركز الوطني لتنمية القطاع غير الربحي)، بصيغة YYYY-MM-DD",
+    ),
 }
 
 
@@ -105,4 +109,3 @@ def _seed_default_admin(session: Session) -> None:
                 force_password_change=True,
             )
         )
-

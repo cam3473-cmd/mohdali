@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -16,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from app.auth.service import has_permission
 from app.db.models import BoardPosition, Member, MemberStatus
-from app.services import board_service
+from app.services import board_service, bylaw_settings_service
 from app.ui.app_context import AppContext
 from app.ui.board.assign_position_dialog import AssignPositionDialog
 from app.ui.common import confirm, show_error, show_info
@@ -30,6 +31,9 @@ class BoardView(QWidget):
         self._can_manage = has_permission(ctx.current_user, "board.manage")
 
         layout = QVBoxLayout(self)
+
+        self.term_label = QLabel()
+        layout.addWidget(self.term_label)
 
         toolbar = QHBoxLayout()
         print_btn = QPushButton("طباعة")
@@ -66,7 +70,18 @@ class BoardView(QWidget):
 
         self.refresh()
 
+    def _term_end_date(self) -> str:
+        return bylaw_settings_service.get_settings(self.ctx.session).board_term_end_date
+
     def refresh(self) -> None:
+        term_end_date = self._term_end_date()
+        if term_end_date:
+            self.term_label.setText(f"<b>دورة المجلس الحالية سارية حتى تاريخ:</b> {term_end_date}")
+        else:
+            self.term_label.setText(
+                "<i>لم يُحدَّد تاريخ نهاية دورة المجلس الحالية — يمكن تعيينه من شاشة الإعدادات ← اللائحة الأساسية</i>"
+            )
+
         positions = board_service.list_current_positions(self.ctx.session)
         self.table.setRowCount(0)
         for pos in positions:
@@ -144,7 +159,7 @@ class BoardView(QWidget):
         if not path:
             return
         try:
-            generate_board_report(positions, path)
+            generate_board_report(positions, path, term_end_date=self._term_end_date() or None)
             show_info(self, f"تم حفظ التقرير في: {path}")
         except Exception as exc:  # noqa: BLE001
             show_error(self, f"تعذر إنشاء التقرير: {exc}")

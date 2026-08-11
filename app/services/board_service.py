@@ -13,6 +13,20 @@ class BoardError(Exception):
     pass
 
 
+def _position_rank(title: str) -> int:
+    """ترتيب عرض المنصب: الرئيس أولًا، ثم نائب الرئيس، ثم أمين الصندوق، ثم أمين السر، ثم بقية الأعضاء."""
+    t = title or ""
+    if "نائب" in t:
+        return 1
+    if "رئيس" in t:
+        return 0
+    if "صندوق" in t or "مالي" in t:
+        return 2
+    if "سر" in t:
+        return 3
+    return 4
+
+
 def assign_position(
     session: Session,
     actor: User,
@@ -65,13 +79,14 @@ def delete_position(session: Session, actor: User, position: BoardPosition) -> N
 
 
 def list_current_positions(session: Session) -> list[BoardPosition]:
-    return (
+    positions = (
         session.query(BoardPosition)
         .filter(BoardPosition.end_date.is_(None))
         .join(Member)
         .order_by(Member.full_name)
         .all()
     )
+    return sorted(positions, key=lambda p: (_position_rank(p.title), p.member.full_name))
 
 
 def list_position_history(session: Session, member: Member) -> list[BoardPosition]:
