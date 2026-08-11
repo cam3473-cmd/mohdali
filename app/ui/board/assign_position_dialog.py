@@ -6,7 +6,7 @@ from datetime import date
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout
 
-from app.db.models import Member
+from app.db.models import BoardPosition, Member
 
 COMMON_TITLES = [
     "رئيس مجلس الإدارة",
@@ -18,9 +18,10 @@ COMMON_TITLES = [
 
 
 class AssignPositionDialog(QDialog):
-    def __init__(self, parent, members: list[Member]):
+    def __init__(self, parent, members: list[Member], position: BoardPosition | None = None):
         super().__init__(parent)
-        self.setWindowTitle("تعيين منصب في مجلس الإدارة")
+        self._editing = position is not None
+        self.setWindowTitle("تعديل منصب" if self._editing else "تعيين منصب في مجلس الإدارة")
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setMinimumWidth(380)
 
@@ -40,13 +41,21 @@ class AssignPositionDialog(QDialog):
         today = date.today()
         self.start_date.setDate(QDate(today.year, today.month, today.day))
 
+        if position is not None:
+            index = self.member_combo.findData(position.member_id)
+            if index >= 0:
+                self.member_combo.setCurrentIndex(index)
+            self.title_combo.setCurrentText(position.title)
+            if position.start_date:
+                self.start_date.setDate(QDate(position.start_date.year, position.start_date.month, position.start_date.day))
+
         form.addRow("العضو:*", self.member_combo)
         form.addRow("المنصب:*", self.title_combo)
         form.addRow("تاريخ التعيين:", self.start_date)
         layout.addLayout(form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("تعيين")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("حفظ" if self._editing else "تعيين")
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("إلغاء")
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
@@ -64,4 +73,3 @@ class AssignPositionDialog(QDialog):
             "start_date": date(qd.year(), qd.month(), qd.day()),
         }
         self.accept()
-

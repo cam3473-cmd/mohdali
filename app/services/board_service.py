@@ -39,6 +39,31 @@ def end_position(session: Session, actor: User, position: BoardPosition, end_dat
     session.commit()
 
 
+def update_position(
+    session: Session,
+    actor: User,
+    position: BoardPosition,
+    member: Member,
+    title: str,
+    start_date: date | None = None,
+    notes: str | None = None,
+) -> None:
+    position.member_id = member.id
+    position.title = title
+    position.start_date = start_date
+    position.notes = notes
+    log_action(session, actor, "update_board_position", "board_position", position.id, details=title)
+    session.commit()
+
+
+def delete_position(session: Session, actor: User, position: BoardPosition) -> None:
+    position_id = position.id
+    details = f"{position.title} — {position.member.full_name}"
+    session.delete(position)
+    log_action(session, actor, "delete_board_position", "board_position", position_id, details=details)
+    session.commit()
+
+
 def list_current_positions(session: Session) -> list[BoardPosition]:
     return (
         session.query(BoardPosition)
@@ -56,4 +81,3 @@ def list_position_history(session: Session, member: Member) -> list[BoardPositio
         .order_by(BoardPosition.start_date.desc().nulls_last())
         .all()
     )
-

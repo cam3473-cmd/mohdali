@@ -1,3 +1,323 @@
+mkdir -p app/services app/ui/board app/reports
+
+cat > app/services/board_service.py << 'MOHDALI_EOF'
+"""إدارة مناصب مجلس الإدارة (تعيين، إنهاء، سجل تاريخي)."""
+from __future__ import annotations
+
+from datetime import date
+
+from sqlalchemy.orm import Session
+
+from app.db.models import BoardPosition, Member, User
+from app.services.audit import log_action
+
+
+class BoardError(Exception):
+    pass
+
+
+def assign_position(
+    session: Session,
+    actor: User,
+    member: Member,
+    title: str,
+    start_date: date | None = None,
+    notes: str | None = None,
+) -> BoardPosition:
+    position = BoardPosition(
+        member_id=member.id, title=title, start_date=start_date or date.today(), notes=notes
+    )
+    session.add(position)
+    session.flush()
+    log_action(session, actor, "assign_board_position", "board_position", position.id, details=title)
+    session.commit()
+    return position
+
+
+def end_position(session: Session, actor: User, position: BoardPosition, end_date: date | None = None) -> None:
+    if position.end_date is not None:
+        raise BoardError("تم إنهاء هذا المنصب مسبقًا")
+    position.end_date = end_date or date.today()
+    log_action(session, actor, "end_board_position", "board_position", position.id)
+    session.commit()
+
+
+def update_position(
+    session: Session,
+    actor: User,
+    position: BoardPosition,
+    member: Member,
+    title: str,
+    start_date: date | None = None,
+    notes: str | None = None,
+) -> None:
+    position.member_id = member.id
+    position.title = title
+    position.start_date = start_date
+    position.notes = notes
+    log_action(session, actor, "update_board_position", "board_position", position.id, details=title)
+    session.commit()
+
+
+def delete_position(session: Session, actor: User, position: BoardPosition) -> None:
+    position_id = position.id
+    details = f"{position.title} — {position.member.full_name}"
+    session.delete(position)
+    log_action(session, actor, "delete_board_position", "board_position", position_id, details=details)
+    session.commit()
+
+
+def list_current_positions(session: Session) -> list[BoardPosition]:
+    return (
+        session.query(BoardPosition)
+        .filter(BoardPosition.end_date.is_(None))
+        .join(Member)
+        .order_by(Member.full_name)
+        .all()
+    )
+
+
+def list_position_history(session: Session, member: Member) -> list[BoardPosition]:
+    return (
+        session.query(BoardPosition)
+        .filter(BoardPosition.member_id == member.id)
+        .order_by(BoardPosition.start_date.desc().nulls_last())
+        .all()
+    )
+MOHDALI_EOF
+
+cat > app/ui/board/assign_position_dialog.py << 'MOHDALI_EOF'
+"""نموذج تعيين منصب في مجلس الإدارة."""
+from __future__ import annotations
+
+from datetime import date
+
+from PySide6.QtCore import QDate, Qt
+from PySide6.QtWidgets import QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout
+
+from app.db.models import BoardPosition, Member
+
+COMMON_TITLES = [
+    "رئيس مجلس الإدارة",
+    "نائب الرئيس",
+    "أمين الصندوق (المشرف المالي)",
+    "أمين السر",
+    "عضو مجلس إدارة",
+]
+
+
+class AssignPositionDialog(QDialog):
+    def __init__(self, parent, members: list[Member], position: BoardPosition | None = None):
+        super().__init__(parent)
+        self._editing = position is not None
+        self.setWindowTitle("تعديل منصب" if self._editing else "تعيين منصب في مجلس الإدارة")
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self.setMinimumWidth(380)
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.member_combo = QComboBox()
+        for m in members:
+            self.member_combo.addItem(m.full_name, m.id)
+
+        self.title_combo = QComboBox()
+        self.title_combo.setEditable(True)
+        self.title_combo.addItems(COMMON_TITLES)
+
+        self.start_date = QDateEdit(calendarPopup=True)
+        self.start_date.setDisplayFormat("yyyy-MM-dd")
+        today = date.today()
+        self.start_date.setDate(QDate(today.year, today.month, today.day))
+
+        if position is not None:
+            index = self.member_combo.findData(position.member_id)
+            if index >= 0:
+                self.member_combo.setCurrentIndex(index)
+            self.title_combo.setCurrentText(position.title)
+            if position.start_date:
+                self.start_date.setDate(QDate(position.start_date.year, position.start_date.month, position.start_date.day))
+
+        form.addRow("العضو:*", self.member_combo)
+        form.addRow("المنصب:*", self.title_combo)
+        form.addRow("تاريخ التعيين:", self.start_date)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("حفظ" if self._editing else "تعيين")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("إلغاء")
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.values: dict | None = None
+
+    def _on_accept(self) -> None:
+        if self.member_combo.count() == 0 or not self.title_combo.currentText().strip():
+            return
+        qd = self.start_date.date()
+        self.values = {
+            "member_id": self.member_combo.currentData(),
+            "title": self.title_combo.currentText().strip(),
+            "start_date": date(qd.year(), qd.month(), qd.day()),
+        }
+        self.accept()
+MOHDALI_EOF
+
+cat > app/ui/board/board_view.py << 'MOHDALI_EOF'
+"""شاشة مناصب مجلس الإدارة."""
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from app.auth.service import has_permission
+from app.db.models import BoardPosition, Member, MemberStatus
+from app.services import board_service
+from app.ui.app_context import AppContext
+from app.ui.board.assign_position_dialog import AssignPositionDialog
+from app.ui.common import confirm, show_error, show_info
+
+
+class BoardView(QWidget):
+    def __init__(self, ctx: AppContext, parent=None):
+        super().__init__(parent)
+        self.ctx = ctx
+        self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        self._can_manage = has_permission(ctx.current_user, "board.manage")
+
+        layout = QVBoxLayout(self)
+
+        toolbar = QHBoxLayout()
+        print_btn = QPushButton("طباعة")
+        print_btn.clicked.connect(self._on_print)
+        toolbar.addWidget(print_btn)
+        toolbar.addStretch()
+        assign_btn = QPushButton("تعيين منصب جديد")
+        assign_btn.setEnabled(self._can_manage)
+        assign_btn.clicked.connect(self._on_assign)
+        toolbar.addWidget(assign_btn)
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["العضو", "المنصب", "تاريخ التعيين"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        layout.addWidget(self.table)
+
+        actions = QHBoxLayout()
+        edit_btn = QPushButton("تعديل")
+        edit_btn.setEnabled(self._can_manage)
+        edit_btn.clicked.connect(self._on_edit)
+        actions.addWidget(edit_btn)
+        end_btn = QPushButton("إنهاء المنصب المحدد")
+        end_btn.setEnabled(self._can_manage)
+        end_btn.clicked.connect(self._on_end_position)
+        actions.addWidget(end_btn)
+        delete_btn = QPushButton("حذف")
+        delete_btn.setEnabled(self._can_manage)
+        delete_btn.clicked.connect(self._on_delete)
+        actions.addWidget(delete_btn)
+        layout.addLayout(actions)
+
+        self.refresh()
+
+    def refresh(self) -> None:
+        positions = board_service.list_current_positions(self.ctx.session)
+        self.table.setRowCount(0)
+        for pos in positions:
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+            title_item = QTableWidgetItem(pos.member.full_name)
+            title_item.setData(Qt.ItemDataRole.UserRole, pos.id)
+            self.table.setItem(row, 0, title_item)
+            self.table.setItem(row, 1, QTableWidgetItem(pos.title))
+            self.table.setItem(row, 2, QTableWidgetItem(pos.start_date.isoformat() if pos.start_date else "—"))
+
+    def _active_members(self) -> list[Member]:
+        return self.ctx.session.query(Member).filter(Member.status == MemberStatus.ACTIVE).order_by(Member.full_name).all()
+
+    def _selected_position(self) -> BoardPosition | None:
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        position_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        return self.ctx.session.get(BoardPosition, position_id)
+
+    def _on_assign(self) -> None:
+        active_members = self._active_members()
+        if not active_members:
+            show_error(self, "لا يوجد أعضاء نشطون لتعيينهم في منصب")
+            return
+        dialog = AssignPositionDialog(self, active_members)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.values:
+            member = self.ctx.session.get(Member, dialog.values.pop("member_id"))
+            board_service.assign_position(self.ctx.session, self.ctx.current_user, member, **dialog.values)
+            self.refresh()
+
+    def _on_edit(self) -> None:
+        position = self._selected_position()
+        if position is None:
+            return
+        active_members = self._active_members()
+        if position.member not in active_members:
+            active_members = [position.member, *active_members]
+        dialog = AssignPositionDialog(self, active_members, position=position)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.values:
+            member = self.ctx.session.get(Member, dialog.values.pop("member_id"))
+            board_service.update_position(self.ctx.session, self.ctx.current_user, position, member, **dialog.values)
+            self.refresh()
+
+    def _on_end_position(self) -> None:
+        position = self._selected_position()
+        if position is None:
+            return
+        if not confirm(self, f"هل تريد إنهاء منصب {position.title} للعضو {position.member.full_name}؟"):
+            return
+        try:
+            board_service.end_position(self.ctx.session, self.ctx.current_user, position)
+            self.refresh()
+        except board_service.BoardError as exc:
+            show_error(self, str(exc))
+
+    def _on_delete(self) -> None:
+        position = self._selected_position()
+        if position is None:
+            return
+        if not confirm(self, f"هل تريد حذف منصب {position.title} للعضو {position.member.full_name} نهائيًا؟"):
+            return
+        board_service.delete_position(self.ctx.session, self.ctx.current_user, position)
+        self.refresh()
+
+    def _on_print(self) -> None:
+        from app.reports.pdf_export import generate_board_report
+
+        positions = board_service.list_current_positions(self.ctx.session)
+        if not positions:
+            show_error(self, "لا توجد مناصب حالية لطباعتها")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "طباعة مجلس الإدارة", "مجلس-الإدارة.pdf", "PDF (*.pdf)")
+        if not path:
+            return
+        try:
+            generate_board_report(positions, path)
+            show_info(self, f"تم حفظ التقرير في: {path}")
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, f"تعذر إنشاء التقرير: {exc}")
+MOHDALI_EOF
+
+cat > app/reports/pdf_export.py << 'MOHDALI_EOF'
 """توليد محضر اجتماع الجمعية العمومية وبطاقات العضوية بصيغة PDF مع دعم النص العربي (RTL)."""
 from __future__ import annotations
 
@@ -365,3 +685,6 @@ def _styled_table(rows: list[list[str]]) -> Table:
         )
     )
     return table
+MOHDALI_EOF
+
+echo "تم تحديث ملفات مجلس الإدارة الأربعة بنجاح"

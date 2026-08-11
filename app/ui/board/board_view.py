@@ -4,6 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QPushButton,
@@ -18,7 +19,7 @@ from app.db.models import BoardPosition, Member, MemberStatus
 from app.services import board_service
 from app.ui.app_context import AppContext
 from app.ui.board.assign_position_dialog import AssignPositionDialog
-from app.ui.common import confirm, show_error
+from app.ui.common import confirm, show_error, show_info
 
 
 class BoardView(QWidget):
@@ -31,6 +32,9 @@ class BoardView(QWidget):
         layout = QVBoxLayout(self)
 
         toolbar = QHBoxLayout()
+        print_btn = QPushButton("طباعة")
+        print_btn.clicked.connect(self._on_print)
+        toolbar.addWidget(print_btn)
         toolbar.addStretch()
         assign_btn = QPushButton("تعيين منصب جديد")
         assign_btn.setEnabled(self._can_manage)
@@ -45,10 +49,20 @@ class BoardView(QWidget):
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table)
 
+        actions = QHBoxLayout()
+        edit_btn = QPushButton("تعديل")
+        edit_btn.setEnabled(self._can_manage)
+        edit_btn.clicked.connect(self._on_edit)
+        actions.addWidget(edit_btn)
         end_btn = QPushButton("إنهاء المنصب المحدد")
         end_btn.setEnabled(self._can_manage)
         end_btn.clicked.connect(self._on_end_position)
-        layout.addWidget(end_btn)
+        actions.addWidget(end_btn)
+        delete_btn = QPushButton("حذف")
+        delete_btn.setEnabled(self._can_manage)
+        delete_btn.clicked.connect(self._on_delete)
+        actions.addWidget(delete_btn)
+        layout.addLayout(actions)
 
         self.refresh()
 
@@ -64,10 +78,18 @@ class BoardView(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(pos.title))
             self.table.setItem(row, 2, QTableWidgetItem(pos.start_date.isoformat() if pos.start_date else "—"))
 
+    def _active_members(self) -> list[Member]:
+        return self.ctx.session.query(Member).filter(Member.status == MemberStatus.ACTIVE).order_by(Member.full_name).all()
+
+    def _selected_position(self) -> BoardPosition | None:
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        position_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        return self.ctx.session.get(BoardPosition, position_id)
+
     def _on_assign(self) -> None:
-        active_members = (
-            self.ctx.session.query(Member).filter(Member.status == MemberStatus.ACTIVE).order_by(Member.full_name).all()
-        )
+        active_members = self._active_members()
         if not active_members:
             show_error(self, "لا يوجد أعضاء نشطون لتعيينهم في منصب")
             return
@@ -77,12 +99,23 @@ class BoardView(QWidget):
             board_service.assign_position(self.ctx.session, self.ctx.current_user, member, **dialog.values)
             self.refresh()
 
-    def _on_end_position(self) -> None:
-        row = self.table.currentRow()
-        if row < 0:
+    def _on_edit(self) -> None:
+        position = self._selected_position()
+        if position is None:
             return
-        position_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-        position = self.ctx.session.get(BoardPosition, position_id)
+        active_members = self._active_members()
+        if position.member not in active_members:
+            active_members = [position.member, *active_members]
+        dialog = AssignPositionDialog(self, active_members, position=position)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.values:
+            member = self.ctx.session.get(Member, dialog.values.pop("member_id"))
+            board_service.update_position(self.ctx.session, self.ctx.current_user, position, member, **dialog.values)
+            self.refresh()
+
+    def _on_end_position(self) -> None:
+        position = self._selected_position()
+        if position is None:
+            return
         if not confirm(self, f"هل تريد إنهاء منصب {position.title} للعضو {position.member.full_name}؟"):
             return
         try:
@@ -91,3 +124,27 @@ class BoardView(QWidget):
         except board_service.BoardError as exc:
             show_error(self, str(exc))
 
+    def _on_delete(self) -> None:
+        position = self._selected_position()
+        if position is None:
+            return
+        if not confirm(self, f"هل تريد حذف منصب {position.title} للعضو {position.member.full_name} نهائيًا؟"):
+            return
+        board_service.delete_position(self.ctx.session, self.ctx.current_user, position)
+        self.refresh()
+
+    def _on_print(self) -> None:
+        from app.reports.pdf_export import generate_board_report
+
+        positions = board_service.list_current_positions(self.ctx.session)
+        if not positions:
+            show_error(self, "لا توجد مناصب حالية لطباعتها")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "طباعة مجلس الإدارة", "مجلس-الإدارة.pdf", "PDF (*.pdf)")
+        if not path:
+            return
+        try:
+            generate_board_report(positions, path)
+            show_info(self, f"تم حفظ التقرير في: {path}")
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, f"تعذر إنشاء التقرير: {exc}")
