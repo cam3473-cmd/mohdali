@@ -1,10 +1,7 @@
 """شاشة الإعدادات: اللائحة الأساسية، المستخدمون، البريد الإلكتروني، النسخ الاحتياطي."""
 from __future__ import annotations
 
-import shutil
-import zipfile
 from datetime import datetime
-from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -30,9 +27,10 @@ from app.auth.service import AuthService, has_permission
 from app.db.models import User
 from app.db.session import get_db_path
 from app.paths import default_backups_dir, ensure_default_backups_dir
-from app.services import bylaw_settings_service, document_service, smtp_settings_service
+from app.services import backup_service, bylaw_settings_service, smtp_settings_service
 from app.ui.app_context import AppContext
 from app.ui.common import confirm, show_error, show_info
+from app.ui.settings.audit_log_tab import AuditLogTab
 from app.ui.settings.user_form_dialog import ROLE_LABELS, UserFormDialog
 
 
@@ -46,6 +44,7 @@ class SettingsView(QTabWidget):
         if has_permission(ctx.current_user, "users.manage"):
             self.addTab(UsersTab(ctx), "المستخدمون")
             self.addTab(SmtpSettingsTab(ctx), "البريد الإلكتروني")
+            self.addTab(AuditLogTab(ctx), "سجل التدقيق")
         self.addTab(BackupTab(ctx), "النسخ الاحتياطي")
 
 
@@ -280,12 +279,7 @@ class BackupTab(QWidget):
             return
         self.ctx.session.commit()
         try:
-            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
-                zf.write(get_db_path(), arcname="membership.db")
-                documents_dir = document_service.documents_dir()
-                for file_path in documents_dir.glob("*"):
-                    if file_path.is_file():
-                        zf.write(file_path, arcname=f"documents/{file_path.name}")
+            backup_service.create_backup(path)
             show_info(self, f"تم حفظ النسخة الاحتياطية في: {path}")
         except Exception as exc:  # noqa: BLE001
             show_error(self, f"تعذر إنشاء النسخة الاحتياطية: {exc}")
@@ -297,18 +291,7 @@ class BackupTab(QWidget):
         if not confirm(self, "سيتم استبدال قاعدة البيانات الحالية بالكامل بهذه النسخة. تأكد من أخذ نسخة احتياطية حديثة أولًا. متابعة؟"):
             return
         try:
-            if path.lower().endswith(".zip"):
-                with zipfile.ZipFile(path, "r") as zf:
-                    with zf.open("membership.db") as src, open(get_db_path(), "wb") as dst:
-                        shutil.copyfileobj(src, dst)
-                    documents_dir = document_service.documents_dir()
-                    for name in zf.namelist():
-                        if name.startswith("documents/") and not name.endswith("/"):
-                            target = documents_dir / Path(name).name
-                            with zf.open(name) as src, open(target, "wb") as dst:
-                                shutil.copyfileobj(src, dst)
-            else:
-                shutil.copy(path, get_db_path())
+            backup_service.restore_backup(path)
             show_info(self, "تم استيراد النسخة الاحتياطية. الرجاء إعادة تشغيل التطبيق الآن لتحميل البيانات المستعادة.")
         except Exception as exc:  # noqa: BLE001
             show_error(self, f"تعذر استعادة النسخة الاحتياطية: {exc}")

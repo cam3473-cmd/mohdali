@@ -139,3 +139,17 @@ def list_members(
         query = query.filter(Member.full_name.ilike(like))
     return query.order_by(Member.full_name).all()
 
+
+def list_unpaid_active_members(session: Session, fee_year: int | None = None) -> list[Member]:
+    """الأعضاء النشطون الذين لم يُسجَّل لهم سداد اشتراك (مقبول أو معفى) عن السنة المحددة."""
+    fee_year = fee_year or date.today().year
+    paid_member_ids = session.query(MembershipFee.member_id).filter(
+        MembershipFee.fee_year == fee_year, MembershipFee.status.in_([FeeStatus.PAID, FeeStatus.WAIVED])
+    )
+    return (
+        session.query(Member)
+        .filter(Member.status == MemberStatus.ACTIVE, ~Member.id.in_(paid_member_ids))
+        .order_by(Member.full_name)
+        .all()
+    )
+

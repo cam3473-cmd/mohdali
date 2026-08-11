@@ -79,7 +79,8 @@ def test_import_dialog_builds(qapp, db_session, admin_user):
 def test_settings_view_builds(qapp, db_session, admin_user):
     ctx = _make_ctx(db_session, admin_user)
     view = SettingsView(ctx)
-    assert view.count() >= 2  # اللائحة الأساسية + المستخدمون + النسخ الاحتياطي
+    # اللائحة الأساسية + المستخدمون + البريد الإلكتروني + سجل التدقيق + النسخ الاحتياطي
+    assert view.count() >= 5
 
 
 def test_main_window_builds_with_all_tabs(qapp, db_session, admin_user, tmp_path, monkeypatch):
@@ -100,4 +101,13 @@ def test_documents_view_builds(qapp, db_session, admin_user, tmp_path, monkeypat
 def test_forgot_password_dialog_builds(qapp, db_session):
     dialog = ForgotPasswordDialog(db_session)
     assert dialog.confirm_btn.isVisible() is False
+
+
+def test_audit_log_tab_builds_and_lists_entries(qapp, db_session, admin_user):
+    ctx = _make_ctx(db_session, admin_user)
+    _seed_sample_data(db_session, admin_user)
+    from app.ui.settings.audit_log_tab import AuditLogTab
+
+    view = AuditLogTab(ctx)
+    assert view.table.rowCount() > 0
 

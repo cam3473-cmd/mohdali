@@ -6,6 +6,7 @@ from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QMessageBox, QTabWidget, QVBoxLayout, QWidget
 
 from app.auth.service import has_permission
+from app.services import backup_service, board_service, bylaw_settings_service
 from app.ui.app_context import AppContext
 from app.ui.assembly.assembly_list_view import AssemblyListView
 from app.ui.board.board_view import BoardView
@@ -14,6 +15,8 @@ from app.ui.dashboard_view import DashboardView
 from app.ui.documents.documents_view import DocumentsView
 from app.ui.members.members_view import MembersView
 from app.ui.settings.settings_view import SettingsView
+
+BOARD_TERM_ALERT_THRESHOLD_DAYS = 200
 
 
 class MainWindow(QMainWindow):
@@ -58,6 +61,23 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"المستخدم الحالي: {ctx.current_user.full_name}")
         logout_action = self.menuBar().addAction("تسجيل الخروج")
         logout_action.triggered.connect(self._on_logout)
+
+        self._check_board_term_alert()
+
+    def _check_board_term_alert(self) -> None:
+        term_end_date = bylaw_settings_service.get_settings(self.ctx.session).board_term_end_date
+        if not board_service.term_alert_needed(term_end_date, threshold_days=BOARD_TERM_ALERT_THRESHOLD_DAYS):
+            return
+        status_text = board_service.term_status_text(term_end_date)
+        QMessageBox.warning(self, "تنبيه: دورة مجلس الإدارة", status_text)
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - اسم الدالة مفروض من Qt
+        try:
+            self.ctx.session.commit()
+            backup_service.run_auto_backup_if_due()
+        except Exception:  # noqa: BLE001 - يجب ألا يمنع فشل النسخ الاحتياطي إغلاق البرنامج
+            pass
+        super().closeEvent(event)
 
     def _size_to_screen(self) -> None:
         """يضبط حجم النافذة وفق الشاشة المتاحة حتى لا يختفي الجزء السفلي على الشاشات الصغيرة."""

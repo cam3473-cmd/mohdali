@@ -111,3 +111,16 @@ def term_status_text(term_end_date: str, as_of: date | None = None) -> str | Non
     if days >= 0:
         return f"دورة المجلس الحالية سارية حتى تاريخ: {term_end_date} — متبقٍ {days} يوم"
     return f"انتهت دورة المجلس بتاريخ: {term_end_date} منذ {abs(days)} يوم — يلزم تجديد اعتماد المجلس"
+
+
+def term_alert_needed(term_end_date: str, threshold_days: int = 200, as_of: date | None = None) -> bool:
+    """هل يجب تنبيه المستخدم؟ نعم إن اقترب انتهاء الدورة (أقل من threshold_days) أو انتهت بالفعل."""
+    if not term_end_date:
+        return False
+    try:
+        end = date.fromisoformat(term_end_date)
+    except ValueError:
+        return False
+    days = (end - (as_of or date.today())).days
+    return days <= threshold_days
+

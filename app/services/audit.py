@@ -24,3 +24,11 @@ def log_action(
         )
     )
 
+
+def list_recent(session: Session, limit: int = 300, search: str | None = None) -> list[AuditLog]:
+    query = session.query(AuditLog).order_by(AuditLog.timestamp.desc())
+    if search:
+        like = f"%{search}%"
+        query = query.filter((AuditLog.action.ilike(like)) | (AuditLog.entity.ilike(like)) | (AuditLog.details.ilike(like)))
+    return query.limit(limit).all()
+

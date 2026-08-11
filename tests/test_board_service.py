@@ -69,3 +69,25 @@ def test_term_status_text_flags_overdue_term():
 
 def test_term_status_text_returns_none_when_unset():
     assert board_service.term_status_text("") is None
+
+
+def test_term_alert_needed_true_when_within_threshold():
+    today = date(2026, 1, 1)
+    soon = today + timedelta(days=150)
+    assert board_service.term_alert_needed(soon.isoformat(), threshold_days=200, as_of=today) is True
+
+
+def test_term_alert_needed_false_when_far_away():
+    today = date(2026, 1, 1)
+    far = today + timedelta(days=300)
+    assert board_service.term_alert_needed(far.isoformat(), threshold_days=200, as_of=today) is False
+
+
+def test_term_alert_needed_true_when_overdue():
+    today = date(2026, 1, 1)
+    past = today - timedelta(days=5)
+    assert board_service.term_alert_needed(past.isoformat(), threshold_days=200, as_of=today) is True
+
+
+def test_term_alert_needed_false_when_unset():
+    assert board_service.term_alert_needed("", threshold_days=200) is False
