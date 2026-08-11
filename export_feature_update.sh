@@ -1,3 +1,172 @@
+mkdir -p app/services tests app/ui/members
+
+cat > app/services/export_service.py << 'MOHDALI_EOF'
+"""تصدير بيانات الأعضاء إلى ملف Excel.
+
+يستخدم نفس عناوين الأعمدة التي تتعرف عليها أداة الاستيراد (import_service)،
+بحيث يمكن تعديل الملف الناتج وإعادة استيراده لاحقًا دون أي تحويل إضافي.
+"""
+from __future__ import annotations
+
+import datetime as dt
+
+import openpyxl
+from openpyxl.styles import Font
+from sqlalchemy.orm import Session
+
+from app.db.models import BoardPosition, FeeStatus, Member, MemberStatus, MembershipFee
+
+EXPORT_HEADERS = [
+    "م",
+    "الاسم",
+    "رقم عضوية",
+    "تاريخ بدء العضوية",
+    "نوع العضوية",
+    "المنصب الحالي",
+    "السداد",
+    "قيمة الاشتراك",
+    "فعال",
+    "رقم السند",
+    "السجل",
+    "تاريخ الميلاد",
+    "الجوال",
+    "الجنس",
+    "المؤهل",
+    "المدينة",
+    "العمل",
+    "الحالة",
+]
+
+STATUS_LABELS_AR = {
+    MemberStatus.ACTIVE: "نشط",
+    MemberStatus.SUSPENDED: "موقوف",
+    MemberStatus.WITHDRAWN: "منسحب",
+    MemberStatus.REJECTED: "مرفوض",
+    MemberStatus.PENDING: "طلب معلّق",
+}
+
+
+def export_members_to_excel(
+    session: Session, members: list[Member], output_path: str, fee_year: int | None = None
+) -> None:
+    fee_year = fee_year or dt.date.today().year
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "الأعضاء"
+    ws.sheet_view.rightToLeft = True
+    ws.append(EXPORT_HEADERS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    for index, member in enumerate(members, start=1):
+        position = (
+            session.query(BoardPosition)
+            .filter(BoardPosition.member_id == member.id, BoardPosition.end_date.is_(None))
+            .first()
+        )
+        fee = (
+            session.query(MembershipFee)
+            .filter(MembershipFee.member_id == member.id, MembershipFee.fee_year == fee_year)
+            .first()
+        )
+        fee_paid = fee is not None and fee.status in (FeeStatus.PAID, FeeStatus.WAIVED)
+
+        ws.append(
+            [
+                index,
+                member.full_name,
+                member.membership_number or "",
+                member.join_date.isoformat() if member.join_date else "",
+                member.member_type,
+                position.title if position else "",
+                "منتظم" if fee_paid else "غير منتظم",
+                fee.amount if fee else "",
+                "نعم" if member.status == MemberStatus.ACTIVE else "لا",
+                fee.receipt_number if fee else "",
+                member.national_id_or_cr or "",
+                member.birth_date.isoformat() if member.birth_date else "",
+                member.phone or "",
+                member.gender or "",
+                member.qualification or "",
+                member.city or "",
+                member.occupation or "",
+                STATUS_LABELS_AR.get(member.status, member.status.value),
+            ]
+        )
+
+    for column_cells in ws.columns:
+        length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+        ws.column_dimensions[column_cells[0].column_letter].width = min(max(length + 2, 10), 40)
+
+    wb.save(output_path)
+MOHDALI_EOF
+
+cat > tests/test_export_service.py << 'MOHDALI_EOF'
+from datetime import date
+
+import openpyxl
+
+from app.services import board_service, export_service, import_service, membership_service
+
+
+def test_export_members_to_excel_writes_expected_data(db_session, admin_user, tmp_path):
+    member = membership_service.submit_membership_request(
+        db_session,
+        admin_user,
+        full_name="عضو للتصدير",
+        member_type="عادية",
+        membership_number="9",
+        national_id_or_cr="1046952857",
+        join_date=date(2020, 1, 1),
+        birth_date=date(1980, 5, 1),
+        phone="500000000",
+        gender="ذكر",
+        qualification="جامعي",
+        city="السليل",
+        occupation="موظف",
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    membership_service.record_fee_payment(db_session, admin_user, member, fee_year=date.today().year, amount=300)
+    board_service.assign_position(db_session, admin_user, member, title="أمين الصندوق")
+
+    output_path = str(tmp_path / "export.xlsx")
+    export_service.export_members_to_excel(db_session, [member], output_path)
+
+    wb = openpyxl.load_workbook(output_path)
+    ws = wb.active
+    header = [cell.value for cell in ws[1]]
+    assert header == export_service.EXPORT_HEADERS
+    row = [cell.value for cell in ws[2]]
+    data = dict(zip(header, row))
+    assert data["الاسم"] == "عضو للتصدير"
+    assert data["السجل"] == "1046952857"
+    assert data["المنصب الحالي"] == "أمين الصندوق"
+    assert data["السداد"] == "منتظم"
+    assert data["فعال"] == "نعم"
+
+
+def test_export_then_reimport_round_trip(db_session, admin_user, tmp_path):
+    member = membership_service.submit_membership_request(
+        db_session,
+        admin_user,
+        full_name="عضو الجولة الكاملة",
+        member_type="عادية",
+        membership_number="10",
+        national_id_or_cr="1099999999",
+        join_date=date(2019, 3, 15),
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+
+    output_path = str(tmp_path / "roundtrip.xlsx")
+    export_service.export_members_to_excel(db_session, [member], output_path)
+
+    report = import_service.import_members_from_excel(db_session, admin_user, output_path)
+    assert report.created == 0
+    assert report.updated == 1
+MOHDALI_EOF
+
+cat > app/ui/members/members_view.py << 'MOHDALI_EOF'
 """شاشة إدارة الأعضاء."""
 from __future__ import annotations
 
@@ -254,3 +423,6 @@ class MembersView(QWidget):
             show_info(self, f"تم حفظ البطاقات في: {path}")
         except Exception as exc:  # noqa: BLE001
             show_error(self, f"تعذر توليد البطاقات: {exc}")
+MOHDALI_EOF
+
+echo "تم تحديث الملفات الثلاثة بنجاح"
