@@ -5,10 +5,10 @@ import os
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.models import Base, BylawSetting, User, UserRole
+from app.db.models import Base, BylawSetting, SmtpSettings, User, UserRole
 from app.auth.security import hash_password
 
 APP_DIR_NAME = "JamiyatAlBirrSulail"
@@ -82,11 +82,23 @@ def init_db(db_path: Path | None = None) -> None:
     """ينشئ الجداول (إن لم تكن موجودة) ويبذر الإعدادات الافتراضية ومستخدم المدير الأولي."""
     engine = get_engine(db_path)
     Base.metadata.create_all(engine)
+    _upgrade_schema(engine)
 
     with get_session_factory()() as session:
         _seed_bylaw_settings(session)
         _seed_default_admin(session)
+        _seed_smtp_settings(session)
         session.commit()
+
+
+def _upgrade_schema(engine) -> None:
+    """يضيف أعمدة جديدة لجداول قديمة موجودة مسبقًا (create_all لا يعدّل جداول موجودة)."""
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        existing_columns = {col["name"] for col in inspector.get_columns("users")}
+        if "email" not in existing_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
 
 
 def _seed_bylaw_settings(session: Session) -> None:
@@ -94,6 +106,11 @@ def _seed_bylaw_settings(session: Session) -> None:
     for key, (value, description) in DEFAULT_BYLAW_SETTINGS.items():
         if key not in existing_keys:
             session.add(BylawSetting(key=key, value=value, description=description))
+
+
+def _seed_smtp_settings(session: Session) -> None:
+    if session.get(SmtpSettings, 1) is None:
+        session.add(SmtpSettings(id=1, port=587, use_tls=True))
 
 
 def _seed_default_admin(session: Session) -> None:
@@ -109,3 +126,4 @@ def _seed_default_admin(session: Session) -> None:
                 force_password_change=True,
             )
         )
+

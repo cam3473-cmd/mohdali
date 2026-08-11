@@ -26,6 +26,8 @@ class UserFormDialog(QDialog):
 
         self.username = QLineEdit()
         self.full_name = QLineEdit()
+        self.email = QLineEdit()
+        self.email.setPlaceholderText("لاستعادة كلمة المرور عند نسيانها (اختياري)")
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.role = QComboBox()
@@ -34,6 +36,7 @@ class UserFormDialog(QDialog):
 
         form.addRow("اسم المستخدم:*", self.username)
         form.addRow("الاسم الكامل:*", self.full_name)
+        form.addRow("البريد الإلكتروني:", self.email)
         form.addRow("كلمة المرور المبدئية:*", self.password)
         form.addRow("الدور:", self.role)
         layout.addLayout(form)
@@ -53,6 +56,7 @@ class UserFormDialog(QDialog):
         self.values = {
             "username": self.username.text().strip(),
             "full_name": self.full_name.text().strip(),
+            "email": self.email.text().strip() or None,
             "password": self.password.text(),
             "role": self.role.currentData(),
         }

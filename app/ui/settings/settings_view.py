@@ -1,17 +1,24 @@
-"""شاشة الإعدادات: اللائحة الأساسية، المستخدمون، النسخ الاحتياطي."""
+"""شاشة الإعدادات: اللائحة الأساسية، المستخدمون، البريد الإلكتروني، النسخ الاحتياطي."""
 from __future__ import annotations
 
 import shutil
+import zipfile
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
+    QLineEdit,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -22,7 +29,8 @@ from PySide6.QtWidgets import (
 from app.auth.service import AuthService, has_permission
 from app.db.models import User
 from app.db.session import get_db_path
-from app.services import bylaw_settings_service
+from app.paths import default_backups_dir, ensure_default_backups_dir
+from app.services import bylaw_settings_service, document_service, smtp_settings_service
 from app.ui.app_context import AppContext
 from app.ui.common import confirm, show_error, show_info
 from app.ui.settings.user_form_dialog import ROLE_LABELS, UserFormDialog
@@ -37,6 +45,7 @@ class SettingsView(QTabWidget):
         self.addTab(BylawSettingsTab(ctx), "اللائحة الأساسية")
         if has_permission(ctx.current_user, "users.manage"):
             self.addTab(UsersTab(ctx), "المستخدمون")
+            self.addTab(SmtpSettingsTab(ctx), "البريد الإلكتروني")
         self.addTab(BackupTab(ctx), "النسخ الاحتياطي")
 
 
@@ -105,16 +114,21 @@ class UsersTab(QWidget):
         toolbar.addWidget(add_btn)
         layout.addLayout(toolbar)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["اسم المستخدم", "الاسم الكامل", "الدور", "نشط"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["اسم المستخدم", "الاسم الكامل", "البريد الإلكتروني", "الدور", "نشط"])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         layout.addWidget(self.table)
 
+        actions = QHBoxLayout()
         toggle_btn = QPushButton("تفعيل/إيقاف المستخدم المحدد")
         toggle_btn.clicked.connect(self._on_toggle_active)
-        layout.addWidget(toggle_btn)
+        actions.addWidget(toggle_btn)
+        email_btn = QPushButton("تعديل البريد الإلكتروني")
+        email_btn.clicked.connect(self._on_edit_email)
+        actions.addWidget(email_btn)
+        layout.addLayout(actions)
 
         self.refresh()
 
@@ -129,8 +143,16 @@ class UsersTab(QWidget):
             username_item.setData(Qt.ItemDataRole.UserRole, user.id)
             self.table.setItem(row, 0, username_item)
             self.table.setItem(row, 1, QTableWidgetItem(user.full_name))
-            self.table.setItem(row, 2, QTableWidgetItem(ROLE_LABELS.get(user.role, user.role.value)))
-            self.table.setItem(row, 3, QTableWidgetItem("نعم" if user.active else "لا"))
+            self.table.setItem(row, 2, QTableWidgetItem(user.email or "—"))
+            self.table.setItem(row, 3, QTableWidgetItem(ROLE_LABELS.get(user.role, user.role.value)))
+            self.table.setItem(row, 4, QTableWidgetItem("نعم" if user.active else "لا"))
+
+    def _selected_user(self) -> User | None:
+        row = self.table.currentRow()
+        if row < 0:
+            return None
+        user_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        return self.ctx.session.get(User, user_id)
 
     def _on_add(self) -> None:
         dialog = UserFormDialog(self)
@@ -143,17 +165,92 @@ class UsersTab(QWidget):
                 show_error(self, str(exc))
 
     def _on_toggle_active(self) -> None:
-        row = self.table.currentRow()
-        if row < 0:
+        user = self._selected_user()
+        if user is None:
             return
-        user_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-        user = self.ctx.session.get(User, user_id)
         if user.id == self.ctx.current_user.id:
             show_error(self, "لا يمكنك إيقاف حسابك الحالي")
             return
         auth = AuthService(self.ctx.session)
         auth.set_active(self.ctx.current_user, user, not user.active)
         self.refresh()
+
+    def _on_edit_email(self) -> None:
+        user = self._selected_user()
+        if user is None:
+            return
+        email, ok = QInputDialog.getText(self, "تعديل البريد الإلكتروني", f"البريد الإلكتروني لـ {user.username}:", text=user.email or "")
+        if not ok:
+            return
+        auth = AuthService(self.ctx.session)
+        auth.set_email(self.ctx.current_user, user, email.strip())
+        self.refresh()
+
+
+class SmtpSettingsTab(QWidget):
+    def __init__(self, ctx: AppContext, parent=None):
+        super().__init__(parent)
+        self.ctx = ctx
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(
+            QLabel(
+                "<b>ملاحظة:</b> تُستخدم هذه الإعدادات لإرسال رمز استعادة كلمة المرور عبر البريد. "
+                "لحسابات Gmail يلزم استخدام «كلمة مرور تطبيق» (App Password) وليس كلمة المرور العادية."
+            )
+        )
+
+        form = QFormLayout()
+        self.host = QLineEdit()
+        self.host.setPlaceholderText("مثال: smtp.gmail.com")
+        self.port = QSpinBox()
+        self.port.setRange(1, 65535)
+        self.port.setValue(587)
+        self.username = QLineEdit()
+        self.username.setPlaceholderText("عنوان البريد المستخدم للإرسال")
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setPlaceholderText("اتركه فارغًا للإبقاء على القيمة الحالية")
+        self.use_tls = QCheckBox("استخدام TLS")
+        self.use_tls.setChecked(True)
+        self.from_address = QLineEdit()
+        self.from_address.setPlaceholderText("عنوان المرسِل الظاهر للمستلم")
+
+        form.addRow("الخادم (Host):", self.host)
+        form.addRow("المنفذ (Port):", self.port)
+        form.addRow("اسم المستخدم:", self.username)
+        form.addRow("كلمة المرور:", self.password)
+        form.addRow("", self.use_tls)
+        form.addRow("عنوان المرسِل:", self.from_address)
+        layout.addLayout(form)
+
+        save_btn = QPushButton("حفظ إعدادات البريد")
+        save_btn.clicked.connect(self._on_save)
+        layout.addWidget(save_btn)
+        layout.addStretch()
+
+        self.refresh()
+
+    def refresh(self) -> None:
+        settings = smtp_settings_service.get_settings(self.ctx.session)
+        self.host.setText(settings.host or "")
+        self.port.setValue(settings.port or 587)
+        self.username.setText(settings.username or "")
+        self.use_tls.setChecked(bool(settings.use_tls))
+        self.from_address.setText(settings.from_address or "")
+
+    def _on_save(self) -> None:
+        smtp_settings_service.update_settings(
+            self.ctx.session,
+            host=self.host.text().strip(),
+            port=self.port.value(),
+            username=self.username.text().strip(),
+            password=self.password.text(),
+            use_tls=self.use_tls.isChecked(),
+            from_address=self.from_address.text().strip(),
+        )
+        self.password.clear()
+        show_info(self, "تم حفظ إعدادات البريد الإلكتروني")
 
 
 class BackupTab(QWidget):
@@ -163,8 +260,9 @@ class BackupTab(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(f"مسار قاعدة البيانات الحالية:\n{get_db_path()}"))
+        layout.addWidget(QLabel(f"مجلد النسخ الاحتياطية الافتراضي:\n{default_backups_dir()}"))
 
-        export_btn = QPushButton("تصدير نسخة احتياطية")
+        export_btn = QPushButton("تصدير نسخة احتياطية (تشمل قاعدة البيانات والمستندات)")
         export_btn.clicked.connect(self._on_export)
         layout.addWidget(export_btn)
 
@@ -175,20 +273,42 @@ class BackupTab(QWidget):
         layout.addStretch()
 
     def _on_export(self) -> None:
-        default_name = f"نسخة-احتياطية-{datetime.now().strftime('%Y-%m-%d_%H%M')}.db"
-        path, _ = QFileDialog.getSaveFileName(self, "حفظ نسخة احتياطية", default_name, "SQLite (*.db)")
+        default_name = f"نسخة-احتياطية-{datetime.now().strftime('%Y-%m-%d_%H%M')}.zip"
+        default_path = str(ensure_default_backups_dir() / default_name)
+        path, _ = QFileDialog.getSaveFileName(self, "حفظ نسخة احتياطية", default_path, "Zip (*.zip)")
         if not path:
             return
         self.ctx.session.commit()
-        shutil.copy(get_db_path(), path)
-        show_info(self, f"تم حفظ النسخة الاحتياطية في: {path}")
+        try:
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.write(get_db_path(), arcname="membership.db")
+                documents_dir = document_service.documents_dir()
+                for file_path in documents_dir.glob("*"):
+                    if file_path.is_file():
+                        zf.write(file_path, arcname=f"documents/{file_path.name}")
+            show_info(self, f"تم حفظ النسخة الاحتياطية في: {path}")
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, f"تعذر إنشاء النسخة الاحتياطية: {exc}")
 
     def _on_import(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "اختيار نسخة احتياطية", "", "SQLite (*.db)")
+        path, _ = QFileDialog.getOpenFileName(self, "اختيار نسخة احتياطية", str(default_backups_dir()), "نسخة احتياطية (*.zip *.db)")
         if not path:
             return
         if not confirm(self, "سيتم استبدال قاعدة البيانات الحالية بالكامل بهذه النسخة. تأكد من أخذ نسخة احتياطية حديثة أولًا. متابعة؟"):
             return
-        shutil.copy(path, get_db_path())
-        show_info(self, "تم استيراد النسخة الاحتياطية. الرجاء إعادة تشغيل التطبيق الآن لتحميل البيانات المستعادة.")
-
+        try:
+            if path.lower().endswith(".zip"):
+                with zipfile.ZipFile(path, "r") as zf:
+                    with zf.open("membership.db") as src, open(get_db_path(), "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    documents_dir = document_service.documents_dir()
+                    for name in zf.namelist():
+                        if name.startswith("documents/") and not name.endswith("/"):
+                            target = documents_dir / Path(name).name
+                            with zf.open(name) as src, open(target, "wb") as dst:
+                                shutil.copyfileobj(src, dst)
+            else:
+                shutil.copy(path, get_db_path())
+            show_info(self, "تم استيراد النسخة الاحتياطية. الرجاء إعادة تشغيل التطبيق الآن لتحميل البيانات المستعادة.")
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, f"تعذر استعادة النسخة الاحتياطية: {exc}")

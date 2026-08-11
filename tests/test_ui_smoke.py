@@ -9,6 +9,8 @@ from app.ui.assembly.assembly_detail_view import AssemblyDetailView
 from app.ui.assembly.assembly_list_view import AssemblyListView
 from app.ui.board.board_view import BoardView
 from app.ui.dashboard_view import DashboardView
+from app.ui.documents.documents_view import DocumentsView
+from app.ui.forgot_password_dialog import ForgotPasswordDialog
 from app.ui.main_window import MainWindow
 from app.ui.members.import_dialog import ImportDialog
 from app.ui.members.members_view import MembersView
@@ -80,9 +82,22 @@ def test_settings_view_builds(qapp, db_session, admin_user):
     assert view.count() >= 2  # اللائحة الأساسية + المستخدمون + النسخ الاحتياطي
 
 
-def test_main_window_builds_with_all_tabs(qapp, db_session, admin_user):
+def test_main_window_builds_with_all_tabs(qapp, db_session, admin_user, tmp_path, monkeypatch):
+    monkeypatch.setenv("MOHDALI_DATA_DIR", str(tmp_path))
     ctx = _make_ctx(db_session, admin_user)
     _seed_sample_data(db_session, admin_user)
     window = MainWindow(ctx)
     assert window.windowTitle()
+
+
+def test_documents_view_builds(qapp, db_session, admin_user, tmp_path, monkeypatch):
+    monkeypatch.setenv("MOHDALI_DATA_DIR", str(tmp_path))
+    ctx = _make_ctx(db_session, admin_user)
+    view = DocumentsView(ctx)
+    assert view.table.rowCount() == 0
+
+
+def test_forgot_password_dialog_builds(qapp, db_session):
+    dialog = ForgotPasswordDialog(db_session)
+    assert dialog.confirm_btn.isVisible() is False
 

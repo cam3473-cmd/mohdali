@@ -80,6 +80,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.VIEWER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     force_password_change: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -232,6 +233,51 @@ class AssemblyDecision(Base):
 
     assembly: Mapped["Assembly"] = relationship(back_populates="decisions")
     agenda_item: Mapped["AssemblyAgendaItem | None"] = relationship(back_populates="decisions")
+
+
+class PasswordResetCode(Base):
+    """رمز تحقق مؤقت لاستعادة كلمة المرور عبر البريد الإلكتروني."""
+
+    __tablename__ = "password_reset_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    code: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    user: Mapped["User"] = relationship()
+
+
+class SmtpSettings(Base):
+    """إعدادات خادم البريد الصادر (SMTP) لإرسال رموز استعادة كلمة المرور. صف واحد فقط (id=1)."""
+
+    __tablename__ = "smtp_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    port: Mapped[int] = mapped_column(Integer, default=587)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    use_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    from_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
+class Document(Base):
+    """مستندات رسمية محفوظة في النظام (خطاب تشكيل المجلس، شهادة الجمعية، خطابات اعتماد البرامج...)."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(String(255))
+    file_name: Mapped[str] = mapped_column(String(255))  # اسم الملف الفعلي داخل مجلد المستندات
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    uploaded_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    uploaded_by: Mapped["User | None"] = relationship()
 
 
 class AuditLog(Base):

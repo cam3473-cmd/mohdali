@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButt
 from app.auth.service import AccountInactive, AuthService, InvalidCredentials
 from app.db.models import User
 from app.ui.common import ChangePasswordDialog, load_logo_pixmap, show_error
+from app.ui.forgot_password_dialog import ForgotPasswordDialog
 
 
 class LoginDialog(QDialog):
@@ -45,7 +46,16 @@ class LoginDialog(QDialog):
         layout.addWidget(login_btn)
         self.password_input.returnPressed.connect(self._on_login)
 
+        forgot_btn = QPushButton("نسيت كلمة المرور؟")
+        forgot_btn.setFlat(True)
+        forgot_btn.clicked.connect(self._on_forgot_password)
+        layout.addWidget(forgot_btn)
+
         self.authenticated_user: User | None = None
+
+    def _on_forgot_password(self) -> None:
+        dialog = ForgotPasswordDialog(self.auth.session, self)
+        dialog.exec()
 
     def _on_login(self) -> None:
         username = self.username_input.text().strip()
@@ -72,5 +82,4 @@ class LoginDialog(QDialog):
 
         self.authenticated_user = user
         self.accept()
-
 

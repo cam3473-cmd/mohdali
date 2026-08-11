@@ -11,6 +11,7 @@ from app.ui.assembly.assembly_list_view import AssemblyListView
 from app.ui.board.board_view import BoardView
 from app.ui.common import load_logo_pixmap
 from app.ui.dashboard_view import DashboardView
+from app.ui.documents.documents_view import DocumentsView
 from app.ui.members.members_view import MembersView
 from app.ui.settings.settings_view import SettingsView
 
@@ -47,6 +48,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(MembersView(ctx), "الأعضاء")
         tabs.addTab(AssemblyListView(ctx), "الجمعية العمومية")
         tabs.addTab(BoardView(ctx), "مجلس الإدارة")
+        tabs.addTab(DocumentsView(ctx), "الوثائق")
         if has_permission(ctx.current_user, "settings.manage") or has_permission(ctx.current_user, "users.manage"):
             tabs.addTab(SettingsView(ctx), "الإعدادات")
         central_layout.addWidget(tabs)
@@ -73,3 +75,4 @@ class MainWindow(QMainWindow):
         self.ctx.auth.logout()
         QMessageBox.information(self, "تسجيل الخروج", "تم تسجيل الخروج. الرجاء إعادة تشغيل التطبيق لتسجيل الدخول مجددًا.")
         self.close()
+

@@ -50,13 +50,16 @@ class AuthService:
         log_action(self.session, self.current_user, "change_password", "user", user.id)
         self.session.commit()
 
-    def create_user(self, actor: User, username: str, password: str, full_name: str, role: UserRole) -> User:
+    def create_user(
+        self, actor: User, username: str, password: str, full_name: str, role: UserRole, email: str | None = None
+    ) -> User:
         if self.session.query(User).filter(User.username == username).first():
             raise AuthError("اسم المستخدم مستخدم بالفعل")
         user = User(
             username=username,
             password_hash=hash_password(password),
             full_name=full_name,
+            email=email or None,
             role=role,
             active=True,
             force_password_change=True,
@@ -72,15 +75,28 @@ class AuthService:
         log_action(self.session, actor, "set_user_active", "user", user.id, details=str(active))
         self.session.commit()
 
+    def set_email(self, actor: User, user: User, email: str | None) -> None:
+        user.email = email or None
+        log_action(self.session, actor, "set_user_email", "user", user.id)
+        self.session.commit()
+
     def list_users(self) -> list[User]:
         return self.session.query(User).order_by(User.username).all()
 
 
 # صلاحيات كل دور على وحدات النظام
 ROLE_PERMISSIONS: dict[UserRole, set[str]] = {
-    UserRole.ADMIN: {"members.manage", "assembly.manage", "settings.manage", "users.manage", "board.manage", "view"},
+    UserRole.ADMIN: {
+        "members.manage",
+        "assembly.manage",
+        "settings.manage",
+        "users.manage",
+        "board.manage",
+        "documents.manage",
+        "view",
+    },
     UserRole.MEMBERSHIP_OFFICER: {"members.manage", "board.manage", "view"},
-    UserRole.ASSEMBLY_MANAGER: {"assembly.manage", "view"},
+    UserRole.ASSEMBLY_MANAGER: {"assembly.manage", "documents.manage", "view"},
     UserRole.VIEWER: {"view"},
 }
 
