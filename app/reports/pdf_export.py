@@ -8,7 +8,9 @@ from pathlib import Path
 
 import arabic_reshaper
 from bidi.algorithm import get_display
-from reportlab.graphics.barcode import code128
+from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode import code128, qr
+from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
@@ -269,8 +271,27 @@ def _draw_membership_card(c: pdf_canvas.Canvas, x: float, y: float, session, mem
     if member.national_id_or_cr:
         c.setFillColor(colors.black)
         c.setStrokeColor(colors.black)
-        barcode = code128.Code128(member.national_id_or_cr, barHeight=0.85 * cm, barWidth=0.9)
-        barcode_x = x + (_CARD_W - barcode.width) / 2
+
+        qr_size = 1.05 * cm
+        qr_x = x + 0.35 * cm
+        qr_y = y + 0.12 * cm
+        qr_data = "|".join(
+            [ASSOCIATION_NAME, member.full_name, member.national_id_or_cr, str(member.membership_number or member.id)]
+        )
+        qr_widget = qr.QrCodeWidget(qr_data)
+        qr_x0, qr_y0, qr_x1, qr_y1 = qr_widget.getBounds()
+        qr_drawing = Drawing(
+            qr_size, qr_size, transform=[qr_size / (qr_x1 - qr_x0), 0, 0, qr_size / (qr_y1 - qr_y0), 0, 0]
+        )
+        qr_drawing.add(qr_widget)
+        renderPDF.draw(qr_drawing, c, qr_x, qr_y)
+
+        barcode = code128.Code128(member.national_id_or_cr, barHeight=0.85 * cm, barWidth=0.72)
+        barcode_area_x = qr_x + qr_size + 0.25 * cm
+        barcode_area_w = (x + _CARD_W - 0.35 * cm) - barcode_area_x
+        barcode_x = barcode_area_x + max(0.0, (barcode_area_w - barcode.width) / 2)
+        c.setFillColor(colors.black)
+        c.setStrokeColor(colors.black)
         barcode.drawOn(c, barcode_x, y + 0.15 * cm)
 
 
@@ -318,5 +339,3 @@ def _styled_table(rows: list[list[str]]) -> Table:
         )
     )
     return table
-
-
