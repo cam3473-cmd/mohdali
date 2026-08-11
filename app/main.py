@@ -28,11 +28,10 @@ def main() -> int:
 
     ctx = AppContext(session=session, auth=auth)
     window = MainWindow(ctx)
-    window.show()
+    window.showMaximized()
 
     return app.exec()
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

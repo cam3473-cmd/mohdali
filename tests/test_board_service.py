@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from app.services import board_service, membership_service
 
@@ -49,3 +49,23 @@ def test_update_and_delete_position(db_session, admin_user):
     board_service.delete_position(db_session, admin_user, position)
     remaining = board_service.list_current_positions(db_session)
     assert position_id not in [p.id for p in remaining]
+
+
+def test_term_status_text_counts_remaining_days():
+    today = date(2026, 1, 1)
+    future = today + timedelta(days=45)
+    text = board_service.term_status_text(future.isoformat(), as_of=today)
+    assert "متبقٍ 45 يوم" in text
+    assert future.isoformat() in text
+
+
+def test_term_status_text_flags_overdue_term():
+    today = date(2026, 1, 1)
+    past = today - timedelta(days=10)
+    text = board_service.term_status_text(past.isoformat(), as_of=today)
+    assert "انتهت دورة المجلس" in text
+    assert "منذ 10 يوم" in text
+
+
+def test_term_status_text_returns_none_when_unset():
+    assert board_service.term_status_text("") is None

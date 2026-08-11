@@ -1,8 +1,11 @@
 """شاشة مناصب مجلس الإدارة."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from datetime import date
+
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
+    QDateEdit,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -22,6 +25,8 @@ from app.ui.app_context import AppContext
 from app.ui.board.assign_position_dialog import AssignPositionDialog
 from app.ui.common import confirm, show_error, show_info
 
+_TERM_DATE_SETTING_KEY = "board_term_end_date"
+
 
 class BoardView(QWidget):
     def __init__(self, ctx: AppContext, parent=None):
@@ -31,6 +36,18 @@ class BoardView(QWidget):
         self._can_manage = has_permission(ctx.current_user, "board.manage")
 
         layout = QVBoxLayout(self)
+
+        term_row = QHBoxLayout()
+        term_row.addWidget(QLabel("تاريخ نهاية دورة المجلس:"))
+        self.term_date_edit = QDateEdit(calendarPopup=True)
+        self.term_date_edit.setDisplayFormat("yyyy-MM-dd")
+        term_row.addWidget(self.term_date_edit)
+        save_term_btn = QPushButton("حفظ التاريخ")
+        save_term_btn.setEnabled(self._can_manage)
+        save_term_btn.clicked.connect(self._on_save_term_date)
+        term_row.addWidget(save_term_btn)
+        term_row.addStretch()
+        layout.addLayout(term_row)
 
         self.term_label = QLabel()
         layout.addWidget(self.term_label)
@@ -73,14 +90,28 @@ class BoardView(QWidget):
     def _term_end_date(self) -> str:
         return bylaw_settings_service.get_settings(self.ctx.session).board_term_end_date
 
+    def _on_save_term_date(self) -> None:
+        qd = self.term_date_edit.date()
+        value = date(qd.year(), qd.month(), qd.day()).isoformat()
+        bylaw_settings_service.update_setting(self.ctx.session, self.ctx.current_user, _TERM_DATE_SETTING_KEY, value)
+        self.refresh()
+
     def refresh(self) -> None:
         term_end_date = self._term_end_date()
         if term_end_date:
-            self.term_label.setText(f"<b>دورة المجلس الحالية سارية حتى تاريخ:</b> {term_end_date}")
+            try:
+                parsed = date.fromisoformat(term_end_date)
+                self.term_date_edit.setDate(QDate(parsed.year, parsed.month, parsed.day))
+            except ValueError:
+                pass
+
+        status_text = board_service.term_status_text(term_end_date)
+        if status_text:
+            is_overdue = date.fromisoformat(term_end_date) < date.today()
+            color = "#b3261e" if is_overdue else "#1c5c33"
+            self.term_label.setText(f"<b style='color:{color}'>{status_text}</b>")
         else:
-            self.term_label.setText(
-                "<i>لم يُحدَّد تاريخ نهاية دورة المجلس الحالية — يمكن تعيينه من شاشة الإعدادات ← اللائحة الأساسية</i>"
-            )
+            self.term_label.setText("<i>لم يُحدَّد تاريخ نهاية دورة المجلس الحالية بعد — اختر تاريخًا واضغط \"حفظ التاريخ\"</i>")
 
         positions = board_service.list_current_positions(self.ctx.session)
         self.table.setRowCount(0)

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QMessageBox, QTabWidget, QVBoxLayout, QWidget
 
 from app.auth.service import has_permission
@@ -21,7 +21,7 @@ class MainWindow(QMainWindow):
         self.ctx = ctx
         self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.setWindowTitle("نظام عضوية الجمعية العمومية — جمعية البر الخيرية بمحافظة السليل")
-        self.resize(1000, 700)
+        self._size_to_screen()
 
         logo_pixmap = load_logo_pixmap(max_height=40)
         if logo_pixmap is not None:
@@ -57,9 +57,19 @@ class MainWindow(QMainWindow):
         logout_action = self.menuBar().addAction("تسجيل الخروج")
         logout_action.triggered.connect(self._on_logout)
 
+    def _size_to_screen(self) -> None:
+        """يضبط حجم النافذة وفق الشاشة المتاحة حتى لا يختفي الجزء السفلي على الشاشات الصغيرة."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            self.resize(1000, 700)
+            return
+        available = screen.availableGeometry()
+        width = min(1100, int(available.width() * 0.92))
+        height = min(780, int(available.height() * 0.9))
+        self.resize(width, height)
+        self.move(available.center() - self.rect().center())
+
     def _on_logout(self) -> None:
         self.ctx.auth.logout()
         QMessageBox.information(self, "تسجيل الخروج", "تم تسجيل الخروج. الرجاء إعادة تشغيل التطبيق لتسجيل الدخول مجددًا.")
         self.close()
-
-

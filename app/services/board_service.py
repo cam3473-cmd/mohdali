@@ -96,3 +96,18 @@ def list_position_history(session: Session, member: Member) -> list[BoardPositio
         .order_by(BoardPosition.start_date.desc().nulls_last())
         .all()
     )
+
+
+def term_status_text(term_end_date: str, as_of: date | None = None) -> str | None:
+    """يبني نص حالة دورة المجلس مع عداد الأيام المتبقية (أو المنقضية) حتى تاريخ نهاية الدورة."""
+    if not term_end_date:
+        return None
+    try:
+        end = date.fromisoformat(term_end_date)
+    except ValueError:
+        return None
+    today = as_of or date.today()
+    days = (end - today).days
+    if days >= 0:
+        return f"دورة المجلس الحالية سارية حتى تاريخ: {term_end_date} — متبقٍ {days} يوم"
+    return f"انتهت دورة المجلس بتاريخ: {term_end_date} منذ {abs(days)} يوم — يلزم تجديد اعتماد المجلس"

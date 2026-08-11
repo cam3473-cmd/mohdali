@@ -22,7 +22,7 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.db.models import Assembly, FeeStatus, Member, MemberStatus
-from app.services import assembly_service
+from app.services import assembly_service, board_service
 
 FONTS_DIR = Path(__file__).resolve().parent.parent / "resources" / "fonts"
 IMAGES_DIR = Path(__file__).resolve().parent.parent / "resources" / "images"
@@ -205,8 +205,9 @@ def generate_board_report(positions: list, output_path: str, term_end_date: str 
         story.append(Spacer(1, 6))
     story.append(Paragraph(ar(ASSOCIATION_NAME), styles["title"]))
     story.append(Paragraph(ar("مجلس الإدارة — المناصب الحالية"), styles["title"]))
-    if term_end_date:
-        story.append(Paragraph(ar(f"دورة المجلس الحالية سارية حتى تاريخ: {term_end_date}"), styles["sub"]))
+    status_text = board_service.term_status_text(term_end_date) if term_end_date else None
+    if status_text:
+        story.append(Paragraph(ar(status_text), styles["sub"]))
     story.append(Spacer(1, 8))
 
     rows = [[ar("تاريخ التعيين"), ar("المنصب"), ar("العضو"), "#"]]
