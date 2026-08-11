@@ -111,3 +111,20 @@ def test_audit_log_tab_builds_and_lists_entries(qapp, db_session, admin_user):
     view = AuditLogTab(ctx)
     assert view.table.rowCount() > 0
 
+
+def test_bylaw_settings_tab_does_not_overwrite_board_term_end_date(qapp, db_session, admin_user, monkeypatch):
+    """يحمي من علة سابقة: تبويب اللائحة الأساسية المفتوح بقيمة قديمة كان يمسح تاريخ نهاية المجلس عند الحفظ."""
+    from app.services import bylaw_settings_service
+    from app.ui.settings import settings_view
+    from app.ui.settings.settings_view import BylawSettingsTab
+
+    monkeypatch.setattr(settings_view, "show_info", lambda *args, **kwargs: None)
+
+    ctx = _make_ctx(db_session, admin_user)
+    stale_tab = BylawSettingsTab(ctx)  # يُبنى بينما board_term_end_date ما زال فارغًا
+
+    bylaw_settings_service.update_setting(db_session, admin_user, "board_term_end_date", "2030-04-17")
+
+    stale_tab._on_save()  # حفظ من التبويب القديم يجب ألا يمسح القيمة المحفوظة حديثًا
+    assert bylaw_settings_service.get_settings(db_session).board_term_end_date == "2030-04-17"
+

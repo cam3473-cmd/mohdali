@@ -8,13 +8,19 @@ import os
 block_cipher = None
 project_root = os.path.abspath(os.path.join(os.path.dirname(SPEC), ".."))
 
+datas = [
+    (os.path.join(project_root, "app", "resources", "fonts"), "app/resources/fonts"),
+]
+images_dir = os.path.join(project_root, "app", "resources", "images")
+if os.path.isdir(images_dir):
+    # يُضمَّن شعار الجمعية إن كان موضوعًا في هذا المجلد وقت التغليف (logo.png/jpg/jpeg)
+    datas.append((images_dir, "app/resources/images"))
+
 a = Analysis(
     [os.path.join(project_root, "app", "main.py")],
     pathex=[project_root],
     binaries=[],
-    datas=[
-        (os.path.join(project_root, "app", "resources", "fonts"), "app/resources/fonts"),
-    ],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
