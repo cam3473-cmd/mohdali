@@ -238,9 +238,19 @@ def compute_member_arrears(session: Session, member: Member, as_of_year: int | N
     return MemberArrears(member=member, unpaid_years=unpaid_years, estimated_amount=len(unpaid_years) * annual_fee)
 
 
-def list_active_members_with_arrears(session: Session, as_of_year: int | None = None) -> list[MemberArrears]:
-    """الأعضاء النشطون الذين عليهم اشتراكات متأخرة سنة واحدة أو أكثر، مرتبين من الأكثر تأخرًا."""
-    members = session.query(Member).filter(Member.status == MemberStatus.ACTIVE).order_by(Member.full_name).all()
+# الحالات التي يُتوقَّع أن يكون لأصحابها سجل اشتراكات فعلي يستحق المتابعة (لا تشمل الطلبات المعلّقة/المرفوضة)
+ARREARS_ELIGIBLE_STATUSES = (MemberStatus.ACTIVE, MemberStatus.SUSPENDED, MemberStatus.WITHDRAWN)
+
+
+def list_members_with_arrears(session: Session, as_of_year: int | None = None) -> list[MemberArrears]:
+    """الأعضاء (نشطين أو موقوفين أو منسحبين) الذين عليهم اشتراكات متأخرة سنة واحدة أو أكثر، مرتبين من
+    الأكثر تأخرًا. يشمل الموقوفين عمدًا لأن إيقاف العضوية غالبًا ما يكون بسبب التأخر عن السداد."""
+    members = (
+        session.query(Member)
+        .filter(Member.status.in_(ARREARS_ELIGIBLE_STATUSES))
+        .order_by(Member.full_name)
+        .all()
+    )
     arrears = [compute_member_arrears(session, m, as_of_year=as_of_year) for m in members]
     return sorted((a for a in arrears if a.years_count > 0), key=lambda a: -a.years_count)
 

@@ -41,7 +41,7 @@ class DashboardView(QWidget):
         active_members = session.query(Member).filter(Member.status == MemberStatus.ACTIVE).count()
         pending_requests = session.query(Member).filter(Member.status == MemberStatus.PENDING).count()
         eligible_count = len(list_eligible_members(session, as_of_date=date.today()))
-        arrears_list = membership_service.list_active_members_with_arrears(session)
+        arrears_list = membership_service.list_members_with_arrears(session)
         arrears_count = len(arrears_list)
         arrears_total = sum(a.estimated_amount for a in arrears_list)
         upcoming = (
@@ -66,7 +66,7 @@ class DashboardView(QWidget):
         )
 
     def _on_show_unpaid(self) -> None:
-        arrears_list = membership_service.list_active_members_with_arrears(self.ctx.session)
+        arrears_list = membership_service.list_members_with_arrears(self.ctx.session)
         if not arrears_list:
             QMessageBox.information(self, "المتأخرون عن السداد", "لا يوجد أعضاء متأخرون عن سداد الاشتراك.")
             return

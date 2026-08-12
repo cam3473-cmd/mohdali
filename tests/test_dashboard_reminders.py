@@ -62,7 +62,7 @@ def test_compute_member_arrears_zero_when_supporting_member_prepaid_future_years
     assert arrears.estimated_amount == 0
 
 
-def test_list_active_members_with_arrears_sorted_most_overdue_first(db_session, admin_user):
+def test_list_members_with_arrears_sorted_most_overdue_first(db_session, admin_user):
     old = membership_service.submit_membership_request(
         db_session, admin_user, full_name="متأخر قديم", member_type="عادية", join_date=date(2020, 1, 1)
     )
@@ -77,9 +77,26 @@ def test_list_active_members_with_arrears_sorted_most_overdue_first(db_session, 
     membership_service.approve_membership(db_session, admin_user, paid_up)
     membership_service.record_fee_payment(db_session, admin_user, paid_up, fee_year=2026, amount=300)
 
-    result = membership_service.list_active_members_with_arrears(db_session, as_of_year=2026)
+    result = membership_service.list_members_with_arrears(db_session, as_of_year=2026)
     names_in_order = [a.member.full_name for a in result]
     assert names_in_order == ["متأخر قديم", "متأخر حديث"]
+
+
+def test_list_members_with_arrears_includes_suspended_members(db_session, admin_user):
+    """علة سابقة: الأعضاء الموقوفون (وهم الأكثر عرضة للتأخر عن السداد) كانوا مستبعدين كليًا من هذه القائمة."""
+    suspended = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="موقوف ومتأخر", member_type="عادية", join_date=date(2020, 1, 1)
+    )
+    membership_service.approve_membership(db_session, admin_user, suspended)
+    membership_service.record_fee_payment(db_session, admin_user, suspended, fee_year=2024, amount=300)
+    membership_service.suspend_membership(db_session, admin_user, suspended, reason="تأخر عن السداد")
+
+    result = membership_service.list_members_with_arrears(db_session, as_of_year=2026)
+    names = {a.member.full_name for a in result}
+    assert "موقوف ومتأخر" in names
+
+    entry = next(a for a in result if a.member.full_name == "موقوف ومتأخر")
+    assert entry.unpaid_years == [2020, 2021, 2022, 2023, 2025, 2026]
 
 
 def test_audit_log_records_and_lists_recent_actions(db_session, admin_user):
