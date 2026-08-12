@@ -98,7 +98,7 @@ def test_import_inactive_member_from_wingding_flag_and_no_fee_recorded(db_sessio
     assert fee is None
 
 
-def test_reimport_updates_existing_member_by_national_id(db_session, admin_user, tmp_path):
+def test_reimport_matches_by_national_id_and_only_fills_missing_fields(db_session, admin_user, tmp_path):
     rows = [
         [1, "محدث تجريبي", "104", 1420, "عادية", "عضو عامل", "منتظم", 300, "þ", 2004, "1044444444",
          None, 500000004, "ذكر", "جامعي", "السليل", "متقاعد"],
@@ -107,8 +107,10 @@ def test_reimport_updates_existing_member_by_national_id(db_session, admin_user,
     report1 = import_service.import_members_from_excel(db_session, admin_user, path, fee_year=2026)
     assert report1.created == 1
 
-    # إعادة الاستيراد بنفس رقم الهوية مع تعديل الاسم يجب أن يحدّث السجل لا أن ينشئ سجلًا جديدًا
-    rows[0][1] = "محدث تجريبي بعد التعديل"
+    # إعادة استيراد بنفس رقم الهوية (من ملف آخر باسم مختلف قليلًا ومؤهل فارغ) يجب أن يحدّث
+    # نفس السجل لا أن ينشئ سجلًا جديدًا، مع إبقاء الاسم والمؤهل الأصليين دون استبدال (نُكمل الفراغات فقط)
+    rows[0][1] = "اسم مختلف من ملف آخر"
+    rows[0][14] = None  # المؤهل فارغ في الملف الثاني
     path2 = _build_workbook(rows, tmp_path)
     report2 = import_service.import_members_from_excel(db_session, admin_user, path2, fee_year=2026)
 
@@ -116,7 +118,30 @@ def test_reimport_updates_existing_member_by_national_id(db_session, admin_user,
     assert report2.updated == 1
     members = db_session.query(Member).filter(Member.national_id_or_cr == "1044444444").all()
     assert len(members) == 1
-    assert members[0].full_name == "محدث تجريبي بعد التعديل"
+    assert members[0].full_name == "محدث تجريبي"  # لم يُستبدَل
+    assert members[0].qualification == "جامعي"  # لم يُمسح رغم فراغه في الملف الثاني
+
+
+def test_reimport_matches_by_full_name_when_no_national_id(db_session, admin_user, tmp_path):
+    rows = [
+        [1, "بلا سجل مدني", "", 1420, "عادية", "عضو عامل", "منتظم", 300, "þ", 0, "",
+         None, "", "ذكر", "", "", ""],
+    ]
+    path = _build_workbook(rows, tmp_path)
+    report1 = import_service.import_members_from_excel(db_session, admin_user, path, fee_year=2026)
+    assert report1.created == 1
+
+    # إعادة استيراد بنفس الاسم ولكن بدون رقم عضوية أو سجل مدني في كلا الملفين — يجب المطابقة بالاسم
+    # وإكمال الحقول الفارغة (المؤهل) دون إنشاء عضو مكرر
+    rows[0][14] = "جامعي"
+    path2 = _build_workbook(rows, tmp_path)
+    report2 = import_service.import_members_from_excel(db_session, admin_user, path2, fee_year=2026)
+
+    assert report2.created == 0
+    assert report2.updated == 1
+    members = db_session.query(Member).filter(Member.full_name == "بلا سجل مدني").all()
+    assert len(members) == 1
+    assert members[0].qualification == "جامعي"
 
 
 def test_missing_voting_member_type_produces_warning(db_session, admin_user, tmp_path):
