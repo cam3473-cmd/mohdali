@@ -1,3 +1,186 @@
+mkdir -p app/services app/ui/members tests
+
+cat > app/services/membership_service.py << 'MOHDALI_EOF'
+"""إدارة طلبات العضوية والأعضاء والاشتراكات."""
+from __future__ import annotations
+
+from datetime import date
+
+from sqlalchemy.orm import Session
+
+from app.db.models import AssemblyAttendance, FeeStatus, Member, MemberStatus, MembershipFee, User
+from app.services.audit import log_action
+
+
+class MembershipError(Exception):
+    pass
+
+
+def submit_membership_request(
+    session: Session,
+    actor: User,
+    *,
+    full_name: str,
+    member_type: str,
+    membership_number: str | None = None,
+    national_id_or_cr: str | None = None,
+    gender: str | None = None,
+    birth_date: date | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    address: str | None = None,
+    qualification: str | None = None,
+    city: str | None = None,
+    occupation: str | None = None,
+    join_date: date | None = None,
+    is_founder: bool = False,
+    notes: str | None = None,
+) -> Member:
+    member = Member(
+        full_name=full_name,
+        membership_number=membership_number,
+        member_type=member_type,
+        national_id_or_cr=national_id_or_cr,
+        gender=gender,
+        birth_date=birth_date,
+        phone=phone,
+        email=email,
+        address=address,
+        qualification=qualification,
+        city=city,
+        occupation=occupation,
+        join_date=join_date or date.today(),
+        is_founder=is_founder,
+        status=MemberStatus.PENDING,
+        notes=notes,
+    )
+    session.add(member)
+    session.flush()
+    log_action(session, actor, "submit_membership_request", "member", member.id)
+    session.commit()
+    return member
+
+
+def approve_membership(session: Session, actor: User, member: Member) -> None:
+    if member.status not in (MemberStatus.PENDING, MemberStatus.SUSPENDED):
+        raise MembershipError("لا يمكن قبول عضو ليس في حالة طلب معلّق أو موقوف")
+    member.status = MemberStatus.ACTIVE
+    log_action(session, actor, "approve_membership", "member", member.id)
+    session.commit()
+
+
+def reject_membership(session: Session, actor: User, member: Member, reason: str) -> None:
+    if member.status != MemberStatus.PENDING:
+        raise MembershipError("لا يمكن رفض عضو ليس في حالة طلب معلّق")
+    member.status = MemberStatus.REJECTED
+    member.notes = ((member.notes or "") + f"\nسبب الرفض: {reason}").strip()
+    log_action(session, actor, "reject_membership", "member", member.id, details=reason)
+    session.commit()
+
+
+def suspend_membership(session: Session, actor: User, member: Member, reason: str) -> None:
+    member.status = MemberStatus.SUSPENDED
+    member.notes = ((member.notes or "") + f"\nسبب الإيقاف: {reason}").strip()
+    log_action(session, actor, "suspend_membership", "member", member.id, details=reason)
+    session.commit()
+
+
+def withdraw_membership(session: Session, actor: User, member: Member) -> None:
+    member.status = MemberStatus.WITHDRAWN
+    log_action(session, actor, "withdraw_membership", "member", member.id)
+    session.commit()
+
+
+def delete_member(session: Session, actor: User, member: Member) -> None:
+    """حذف عضو نهائيًا (لتصحيح تكرار ناتج عن استيراد، مثلًا). يُرفض الحذف إن كان للعضو سجل حضور/توكيل
+    في اجتماع سابق للجمعية العمومية — استخدم إيقاف العضوية أو تسجيل الانسحاب في هذه الحالة بدلًا من الحذف."""
+    has_history = (
+        session.query(AssemblyAttendance)
+        .filter(
+            (AssemblyAttendance.member_id == member.id) | (AssemblyAttendance.proxy_holder_member_id == member.id)
+        )
+        .first()
+    )
+    if has_history is not None:
+        raise MembershipError(
+            "لا يمكن حذف هذا العضو لوجود سجل حضور/توكيل مرتبط به في اجتماع سابق للجمعية العمومية. "
+            "استخدم \"إيقاف العضوية\" أو \"تسجيل انسحاب\" بدلًا من الحذف."
+        )
+    member_id = member.id
+    details = f"{member.full_name} ({member.membership_number or '—'})"
+    session.delete(member)
+    log_action(session, actor, "delete_member", "member", member_id, details=details)
+    session.commit()
+
+
+def update_member(session: Session, actor: User, member: Member, **fields) -> Member:
+    for key, value in fields.items():
+        if not hasattr(member, key):
+            raise MembershipError(f"حقل غير معروف: {key}")
+        setattr(member, key, value)
+    log_action(session, actor, "update_member", "member", member.id)
+    session.commit()
+    return member
+
+
+def record_fee_payment(
+    session: Session,
+    actor: User,
+    member: Member,
+    *,
+    fee_year: int,
+    amount: float,
+    paid_date: date | None = None,
+    payment_method: str | None = None,
+    receipt_number: str | None = None,
+) -> MembershipFee:
+    fee = (
+        session.query(MembershipFee)
+        .filter(MembershipFee.member_id == member.id, MembershipFee.fee_year == fee_year)
+        .first()
+    )
+    if fee is None:
+        fee = MembershipFee(member_id=member.id, fee_year=fee_year)
+        session.add(fee)
+    fee.amount = amount
+    fee.paid_date = paid_date or date.today()
+    fee.payment_method = payment_method
+    fee.receipt_number = receipt_number
+    fee.status = FeeStatus.PAID
+    session.flush()
+    log_action(session, actor, "record_fee_payment", "membership_fee", fee.id, details=f"year={fee_year}")
+    session.commit()
+    return fee
+
+
+def list_members(
+    session: Session, status: MemberStatus | None = None, search: str | None = None
+) -> list[Member]:
+    query = session.query(Member)
+    if status is not None:
+        query = query.filter(Member.status == status)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(Member.full_name.ilike(like))
+    return query.order_by(Member.full_name).all()
+
+
+def list_unpaid_active_members(session: Session, fee_year: int | None = None) -> list[Member]:
+    """الأعضاء النشطون الذين لم يُسجَّل لهم سداد اشتراك (مقبول أو معفى) عن السنة المحددة."""
+    fee_year = fee_year or date.today().year
+    paid_member_ids = session.query(MembershipFee.member_id).filter(
+        MembershipFee.fee_year == fee_year, MembershipFee.status.in_([FeeStatus.PAID, FeeStatus.WAIVED])
+    )
+    return (
+        session.query(Member)
+        .filter(Member.status == MemberStatus.ACTIVE, ~Member.id.in_(paid_member_ids))
+        .order_by(Member.full_name)
+        .all()
+    )
+
+MOHDALI_EOF
+
+cat > app/ui/members/members_view.py << 'MOHDALI_EOF'
 """شاشة إدارة الأعضاء."""
 from __future__ import annotations
 
@@ -282,3 +465,87 @@ class MembersView(QWidget):
         except Exception as exc:  # noqa: BLE001
             show_error(self, f"تعذر توليد البطاقات: {exc}")
 
+MOHDALI_EOF
+
+cat > tests/test_membership_service.py << 'MOHDALI_EOF'
+from datetime import date
+
+import pytest
+
+from app.db.models import AssemblyType, MemberStatus
+from app.services import assembly_service, membership_service
+
+
+def test_submit_and_approve_membership(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="أحمد علي", member_type="عامل", join_date=date.today()
+    )
+    assert member.status == MemberStatus.PENDING
+
+    membership_service.approve_membership(db_session, admin_user, member)
+    assert member.status == MemberStatus.ACTIVE
+
+
+def test_cannot_approve_already_active_member(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="سعيد محمد", member_type="عامل", join_date=date.today()
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    with pytest.raises(membership_service.MembershipError):
+        membership_service.approve_membership(db_session, admin_user, member)
+
+
+def test_reject_membership_records_reason(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="خالد سالم", member_type="عامل", join_date=date.today()
+    )
+    membership_service.reject_membership(db_session, admin_user, member, reason="عدم استيفاء الشروط")
+    assert member.status == MemberStatus.REJECTED
+    assert "عدم استيفاء الشروط" in member.notes
+
+
+def test_record_fee_payment_updates_status(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="منى فهد", member_type="عامل", join_date=date.today()
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    fee = membership_service.record_fee_payment(
+        db_session, admin_user, member, fee_year=date.today().year, amount=150
+    )
+    assert fee.status.value == "paid"
+    assert fee.amount == 150
+
+
+def test_delete_member_removes_duplicate_without_history(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="نسخة مكررة", member_type="عامل", join_date=date.today()
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    membership_service.record_fee_payment(db_session, admin_user, member, fee_year=date.today().year, amount=100)
+    member_id = member.id
+
+    membership_service.delete_member(db_session, admin_user, member)
+
+    assert db_session.get(type(member), member_id) is None
+
+
+def test_delete_member_blocked_when_has_assembly_attendance(db_session, admin_user):
+    join_date = date.today().replace(year=date.today().year - 1)
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="عضو له سجل حضور", member_type="عامل", join_date=join_date
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    membership_service.record_fee_payment(db_session, admin_user, member, fee_year=date.today().year, amount=100)
+
+    assembly = assembly_service.create_assembly(
+        db_session, admin_user, title="اجتماع اختبار الحذف", type=AssemblyType.ORDINARY, meeting_date=date.today()
+    )
+    assembly_service.open_assembly(db_session, admin_user, assembly)
+    assembly_service.check_in_member(db_session, admin_user, assembly, member)
+
+    with pytest.raises(membership_service.MembershipError, match="سجل حضور"):
+        membership_service.delete_member(db_session, admin_user, member)
+
+MOHDALI_EOF
+
+echo "تم تحديث الملفات بنجاح"

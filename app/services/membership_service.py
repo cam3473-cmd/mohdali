@@ -5,7 +5,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from app.db.models import FeeStatus, Member, MemberStatus, MembershipFee, User
+from app.db.models import AssemblyAttendance, FeeStatus, Member, MemberStatus, MembershipFee, User
 from app.services.audit import log_action
 
 
@@ -85,6 +85,28 @@ def suspend_membership(session: Session, actor: User, member: Member, reason: st
 def withdraw_membership(session: Session, actor: User, member: Member) -> None:
     member.status = MemberStatus.WITHDRAWN
     log_action(session, actor, "withdraw_membership", "member", member.id)
+    session.commit()
+
+
+def delete_member(session: Session, actor: User, member: Member) -> None:
+    """حذف عضو نهائيًا (لتصحيح تكرار ناتج عن استيراد، مثلًا). يُرفض الحذف إن كان للعضو سجل حضور/توكيل
+    في اجتماع سابق للجمعية العمومية — استخدم إيقاف العضوية أو تسجيل الانسحاب في هذه الحالة بدلًا من الحذف."""
+    has_history = (
+        session.query(AssemblyAttendance)
+        .filter(
+            (AssemblyAttendance.member_id == member.id) | (AssemblyAttendance.proxy_holder_member_id == member.id)
+        )
+        .first()
+    )
+    if has_history is not None:
+        raise MembershipError(
+            "لا يمكن حذف هذا العضو لوجود سجل حضور/توكيل مرتبط به في اجتماع سابق للجمعية العمومية. "
+            "استخدم \"إيقاف العضوية\" أو \"تسجيل انسحاب\" بدلًا من الحذف."
+        )
+    member_id = member.id
+    details = f"{member.full_name} ({member.membership_number or '—'})"
+    session.delete(member)
+    log_action(session, actor, "delete_member", "member", member_id, details=details)
     session.commit()
 
 

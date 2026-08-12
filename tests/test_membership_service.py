@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 
-from app.db.models import MemberStatus
-from app.services import membership_service
+from app.db.models import AssemblyType, MemberStatus
+from app.services import assembly_service, membership_service
 
 
 def test_submit_and_approve_membership(db_session, admin_user):
@@ -44,4 +44,35 @@ def test_record_fee_payment_updates_status(db_session, admin_user):
     )
     assert fee.status.value == "paid"
     assert fee.amount == 150
+
+
+def test_delete_member_removes_duplicate_without_history(db_session, admin_user):
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="نسخة مكررة", member_type="عامل", join_date=date.today()
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    membership_service.record_fee_payment(db_session, admin_user, member, fee_year=date.today().year, amount=100)
+    member_id = member.id
+
+    membership_service.delete_member(db_session, admin_user, member)
+
+    assert db_session.get(type(member), member_id) is None
+
+
+def test_delete_member_blocked_when_has_assembly_attendance(db_session, admin_user):
+    join_date = date.today().replace(year=date.today().year - 1)
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="عضو له سجل حضور", member_type="عامل", join_date=join_date
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+    membership_service.record_fee_payment(db_session, admin_user, member, fee_year=date.today().year, amount=100)
+
+    assembly = assembly_service.create_assembly(
+        db_session, admin_user, title="اجتماع اختبار الحذف", type=AssemblyType.ORDINARY, meeting_date=date.today()
+    )
+    assembly_service.open_assembly(db_session, admin_user, assembly)
+    assembly_service.check_in_member(db_session, admin_user, assembly, member)
+
+    with pytest.raises(membership_service.MembershipError, match="سجل حضور"):
+        membership_service.delete_member(db_session, admin_user, member)
 
