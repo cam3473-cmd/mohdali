@@ -1,12 +1,14 @@
 """إدارة طلبات العضوية والأعضاء والاشتراكات."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 
 from sqlalchemy.orm import Session
 
 from app.db.models import AssemblyAttendance, FeeStatus, Member, MemberStatus, MembershipFee, User
 from app.services.audit import log_action
+from app.services.bylaw_settings_service import get_settings
 
 
 class MembershipError(Exception):
@@ -206,4 +208,39 @@ def list_unpaid_active_members(session: Session, fee_year: int | None = None) ->
         .order_by(Member.full_name)
         .all()
     )
+
+
+@dataclass
+class MemberArrears:
+    member: Member
+    unpaid_years: list[int]
+    estimated_amount: float
+
+    @property
+    def years_count(self) -> int:
+        return len(self.unpaid_years)
+
+
+def compute_member_arrears(session: Session, member: Member, as_of_year: int | None = None) -> MemberArrears:
+    """يحسب السنوات التي لم يُسجَّل للعضو فيها سداد (مقبول أو معفى)، من سنة انضمامه حتى السنة الحالية.
+    السنوات المدفوعة مسبقًا لعضو داعم (بمبالغ استثنائية) تُستبعد تلقائيًا طالما سُجِّل لها سند سداد
+    مستقل لكل سنة، بصرف النظر عن قيمته — فالتقدير المالي أدناه تقريبي فقط ولا يعكس الحالات الخاصة."""
+    as_of_year = as_of_year or date.today().year
+    paid_years = {
+        f.fee_year
+        for f in session.query(MembershipFee).filter(
+            MembershipFee.member_id == member.id, MembershipFee.status.in_([FeeStatus.PAID, FeeStatus.WAIVED])
+        )
+    }
+    start_year = min(member.join_date.year, as_of_year)
+    unpaid_years = [y for y in range(start_year, as_of_year + 1) if y not in paid_years]
+    annual_fee = get_settings(session).annual_membership_fee
+    return MemberArrears(member=member, unpaid_years=unpaid_years, estimated_amount=len(unpaid_years) * annual_fee)
+
+
+def list_active_members_with_arrears(session: Session, as_of_year: int | None = None) -> list[MemberArrears]:
+    """الأعضاء النشطون الذين عليهم اشتراكات متأخرة سنة واحدة أو أكثر، مرتبين من الأكثر تأخرًا."""
+    members = session.query(Member).filter(Member.status == MemberStatus.ACTIVE).order_by(Member.full_name).all()
+    arrears = [compute_member_arrears(session, m, as_of_year=as_of_year) for m in members]
+    return sorted((a for a in arrears if a.years_count > 0), key=lambda a: -a.years_count)
 

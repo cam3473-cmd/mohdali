@@ -41,7 +41,9 @@ class DashboardView(QWidget):
         active_members = session.query(Member).filter(Member.status == MemberStatus.ACTIVE).count()
         pending_requests = session.query(Member).filter(Member.status == MemberStatus.PENDING).count()
         eligible_count = len(list_eligible_members(session, as_of_date=date.today()))
-        unpaid_count = len(membership_service.list_unpaid_active_members(session))
+        arrears_list = membership_service.list_active_members_with_arrears(session)
+        arrears_count = len(arrears_list)
+        arrears_total = sum(a.estimated_amount for a in arrears_list)
         upcoming = (
             session.query(Assembly)
             .filter(Assembly.meeting_date >= date.today(), Assembly.status != AssemblyStatus.CANCELLED)
@@ -50,22 +52,33 @@ class DashboardView(QWidget):
         )
         upcoming_lines = "".join(f"<li>{a.title} — {a.meeting_date.isoformat()}</li>" for a in upcoming) or "<li>لا توجد اجتماعات قادمة</li>"
 
-        unpaid_color = "#b3261e" if unpaid_count else "#1e7d34"
+        arrears_color = "#b3261e" if arrears_count else "#1e7d34"
         self.summary_label.setText(
             f"<h2>مرحبًا، {self.ctx.current_user.full_name}</h2>"
             f"<p>إجمالي الأعضاء: <b>{total_members}</b> — الأعضاء النشطون: <b>{active_members}</b> — "
             f"طلبات عضوية معلّقة: <b>{pending_requests}</b></p>"
             f"<p>الأعضاء المؤهلون لحضور/التصويت في الجمعية العمومية اليوم: <b>{eligible_count}</b></p>"
-            f"<p>الأعضاء المتأخرون عن سداد اشتراك {date.today().year}: "
-            f"<b style='color:{unpaid_color}'>{unpaid_count}</b></p>"
+            f"<p>الأعضاء المتأخرون عن سداد الاشتراك (سنة واحدة أو أكثر): "
+            f"<b style='color:{arrears_color}'>{arrears_count}</b>"
+            + (f" — إجمالي المستحقات التقديرية: <b>{arrears_total:,.0f} ريال</b>" if arrears_count else "")
+            + "</p>"
             f"<p>الاجتماعات القادمة:</p><ul>{upcoming_lines}</ul>"
         )
 
     def _on_show_unpaid(self) -> None:
-        unpaid = membership_service.list_unpaid_active_members(self.ctx.session)
-        if not unpaid:
-            QMessageBox.information(self, "المتأخرون عن السداد", "لا يوجد أعضاء متأخرون عن سداد الاشتراك لهذا العام.")
+        arrears_list = membership_service.list_active_members_with_arrears(self.ctx.session)
+        if not arrears_list:
+            QMessageBox.information(self, "المتأخرون عن السداد", "لا يوجد أعضاء متأخرون عن سداد الاشتراك.")
             return
-        names = "\n".join(f"- {m.full_name}" for m in unpaid)
-        QMessageBox.information(self, "المتأخرون عن السداد", f"عدد الأعضاء المتأخرين: {len(unpaid)}\n\n{names}")
+        lines = [
+            f"- {a.member.full_name}: متأخر {a.years_count} سنة ({', '.join(str(y) for y in a.unpaid_years)}) "
+            f"— تقديريًا {a.estimated_amount:,.0f} ريال"
+            for a in arrears_list
+        ]
+        total = sum(a.estimated_amount for a in arrears_list)
+        message = (
+            f"عدد الأعضاء المتأخرين: {len(arrears_list)} — إجمالي المستحقات التقديرية: {total:,.0f} ريال\n\n"
+            + "\n".join(lines)
+        )
+        QMessageBox.information(self, "المتأخرون عن السداد", message)
 

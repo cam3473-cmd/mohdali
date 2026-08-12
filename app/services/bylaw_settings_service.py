@@ -21,6 +21,7 @@ class BylawSettings:
     majority_special_percent: float
     max_proxies_per_holder: int
     board_term_end_date: str
+    annual_membership_fee: float
 
 
 def _to_bool(value: str) -> bool:
@@ -42,6 +43,7 @@ def get_settings(session: Session) -> BylawSettings:
         majority_special_percent=float(rows.get("majority_special_percent", "66.67")),
         max_proxies_per_holder=int(rows.get("max_proxies_per_holder", "0")),
         board_term_end_date=rows.get("board_term_end_date", ""),
+        annual_membership_fee=float(rows.get("annual_membership_fee", "300")),
     )
 
 
@@ -57,3 +59,4 @@ def update_setting(session: Session, actor: User, key: str, value: str) -> None:
 
 def list_settings(session: Session) -> list[BylawSetting]:
     return session.query(BylawSetting).order_by(BylawSetting.key).all()
+
