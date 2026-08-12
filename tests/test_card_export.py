@@ -50,3 +50,18 @@ def test_generate_membership_cards_handles_member_without_national_id(db_session
     with open(output_path, "rb") as f:
         assert f.read().startswith(b"%PDF")
 
+
+def test_generate_membership_cards_uses_membership_number_when_no_national_id(db_session, admin_user, tmp_path):
+    """يجب أن يظهر باركود/QR بالاعتماد على رقم العضوية عند غياب السجل المدني، بدلًا من إخفائهما."""
+    member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="رقم عضوية فقط", member_type="عادية", membership_number="99", join_date=date(2020, 1, 1)
+    )
+    membership_service.approve_membership(db_session, admin_user, member)
+
+    output_path = str(tmp_path / "cards_membership_number_only.pdf")
+    generate_membership_cards(db_session, [member], output_path)
+
+    with open(output_path, "rb") as f:
+        content = f.read()
+    assert content.startswith(b"%PDF")
+    assert len(content) > 1000

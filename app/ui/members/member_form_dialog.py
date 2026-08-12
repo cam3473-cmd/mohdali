@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 
 from PySide6.QtCore import QDate, Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -12,8 +13,10 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QLineEdit,
+    QScrollArea,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.db.models import Member
@@ -30,7 +33,12 @@ class MemberFormDialog(QDialog):
         self.setMinimumWidth(420)
 
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        form_container = QWidget()
+        form = QFormLayout(form_container)
 
         self.full_name = QLineEdit(member.full_name if member else "")
         self.membership_number = QLineEdit(member.membership_number or "" if member else "")
@@ -98,7 +106,9 @@ class MemberFormDialog(QDialog):
         form.addRow("تاريخ الانضمام:*", self.join_date)
         form.addRow("", self.is_founder)
         form.addRow("ملاحظات:", self.notes)
-        layout.addLayout(form)
+
+        scroll.setWidget(form_container)
+        layout.addWidget(scroll)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("حفظ")
@@ -108,6 +118,19 @@ class MemberFormDialog(QDialog):
         layout.addWidget(buttons)
 
         self.values: dict | None = None
+        self._size_to_screen()
+
+    def _size_to_screen(self) -> None:
+        """يحدّ ارتفاع نافذة الإضافة/التعديل بحجم الشاشة المتاحة، مع محتوى قابل للتمرير،
+        حتى يبقى زرا الحفظ/الإلغاء ظاهرين دائمًا حتى على الشاشات الصغيرة."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            self.resize(460, 640)
+            return
+        available = screen.availableGeometry()
+        width = min(480, int(available.width() * 0.55))
+        height = min(700, int(available.height() * 0.88))
+        self.resize(width, height)
 
     def _on_accept(self) -> None:
         if not self.full_name.text().strip():

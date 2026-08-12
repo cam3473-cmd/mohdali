@@ -112,6 +112,61 @@ def test_audit_log_tab_builds_and_lists_entries(qapp, db_session, admin_user):
     assert view.table.rowCount() > 0
 
 
+def test_members_view_add_shows_error_and_keeps_session_usable_on_duplicate(qapp, db_session, admin_user, monkeypatch):
+    """يحمي من علة سابقة: خطأ عدم قبول الحفظ (تعارض رقم عضوية/سجل مدني) كان يمر بصمت ويعطّل الجلسة للاستخدام لاحقًا."""
+    from app.ui.common import show_error as show_error_fn
+
+    ctx = _make_ctx(db_session, admin_user)
+    membership_service.submit_membership_request(
+        db_session, admin_user, full_name="عضو موجود", member_type="عامل", membership_number="200", join_date=date.today()
+    )
+
+    view = MembersView(ctx)
+
+    errors = []
+    import app.ui.members.members_view as members_view_module
+
+    monkeypatch.setattr(members_view_module, "show_error", lambda parent, msg: errors.append(msg))
+
+    class _FakeDialog:
+        DialogCode = None
+        values = {
+            "full_name": "عضو جديد",
+            "member_type": "عامل",
+            "membership_number": "200",  # تعارض متعمد
+            "national_id_or_cr": None,
+            "gender": "ذكر",
+            "birth_date": date(1990, 1, 1),
+            "phone": None,
+            "email": None,
+            "address": None,
+            "qualification": None,
+            "city": None,
+            "occupation": None,
+            "join_date": date.today(),
+            "is_founder": False,
+            "notes": None,
+        }
+
+        def exec(self):
+            from PySide6.QtWidgets import QDialog
+
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(members_view_module, "MemberFormDialog", lambda *a, **k: _FakeDialog())
+
+    view._on_add()
+
+    assert len(errors) == 1
+    assert "200" in errors[0]
+
+    # الجلسة يجب أن تبقى صالحة للاستخدام بعد الخطأ (لا يوجد PendingRollbackError متبقٍ)
+    fresh_member = membership_service.submit_membership_request(
+        db_session, admin_user, full_name="عضو بعد الخطأ", member_type="عامل", join_date=date.today()
+    )
+    assert fresh_member.id is not None
+
+
 def test_bylaw_settings_tab_does_not_overwrite_board_term_end_date(qapp, db_session, admin_user, monkeypatch):
     """يحمي من علة سابقة: تبويب اللائحة الأساسية المفتوح بقيمة قديمة كان يمسح تاريخ نهاية المجلس عند الحفظ."""
     from app.services import bylaw_settings_service

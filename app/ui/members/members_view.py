@@ -150,8 +150,15 @@ class MembersView(QWidget):
     def _on_add(self) -> None:
         dialog = MemberFormDialog(self, member_types=self._existing_member_types())
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.values:
-            membership_service.submit_membership_request(self.ctx.session, self.ctx.current_user, **dialog.values)
-            self.refresh()
+            try:
+                membership_service.submit_membership_request(self.ctx.session, self.ctx.current_user, **dialog.values)
+                self.refresh()
+            except membership_service.MembershipError as exc:
+                self.ctx.session.rollback()
+                show_error(self, str(exc))
+            except Exception as exc:  # noqa: BLE001
+                self.ctx.session.rollback()
+                show_error(self, f"تعذر حفظ العضو: {exc}")
 
     def _on_edit(self) -> None:
         member = self._selected_member()
@@ -159,8 +166,15 @@ class MembersView(QWidget):
             return
         dialog = MemberFormDialog(self, member=member, member_types=self._existing_member_types())
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.values:
-            membership_service.update_member(self.ctx.session, self.ctx.current_user, member, **dialog.values)
-            self.refresh()
+            try:
+                membership_service.update_member(self.ctx.session, self.ctx.current_user, member, **dialog.values)
+                self.refresh()
+            except membership_service.MembershipError as exc:
+                self.ctx.session.rollback()
+                show_error(self, str(exc))
+            except Exception as exc:  # noqa: BLE001
+                self.ctx.session.rollback()
+                show_error(self, f"تعذر حفظ التعديلات: {exc}")
 
     def _on_approve(self) -> None:
         member = self._selected_member()

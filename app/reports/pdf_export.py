@@ -317,7 +317,10 @@ def _draw_membership_card(c: pdf_canvas.Canvas, x: float, y: float, session, mem
     c.setFont(FONT_BOLD_NAME, 8.5)
     c.drawString(value_x, text_y, ar("فعّال" if is_active else "غير فعّال"))
 
-    if member.national_id_or_cr:
+    # نعتمد السجل المدني إن وُجد، وإلا رقم العضوية كبديل، حتى تظهر البطاقة برمز قابل للمسح
+    # حتى لأعضاء لم يُسجَّل سجلهم المدني بعد.
+    code_identifier = member.national_id_or_cr or member.membership_number
+    if code_identifier:
         c.setFillColor(colors.black)
         c.setStrokeColor(colors.black)
 
@@ -325,7 +328,7 @@ def _draw_membership_card(c: pdf_canvas.Canvas, x: float, y: float, session, mem
         qr_x = x + 0.35 * cm
         qr_y = y + 0.12 * cm
         qr_data = "|".join(
-            [ASSOCIATION_NAME, member.full_name, member.national_id_or_cr, str(member.membership_number or member.id)]
+            [ASSOCIATION_NAME, member.full_name, code_identifier, str(member.membership_number or member.id)]
         )
         qr_widget = qr.QrCodeWidget(qr_data)
         qr_x0, qr_y0, qr_x1, qr_y1 = qr_widget.getBounds()
@@ -335,7 +338,7 @@ def _draw_membership_card(c: pdf_canvas.Canvas, x: float, y: float, session, mem
         qr_drawing.add(qr_widget)
         renderPDF.draw(qr_drawing, c, qr_x, qr_y)
 
-        barcode = code128.Code128(member.national_id_or_cr, barHeight=0.85 * cm, barWidth=0.72)
+        barcode = code128.Code128(code_identifier, barHeight=0.85 * cm, barWidth=0.72)
         barcode_area_x = qr_x + qr_size + 0.25 * cm
         barcode_area_w = (x + _CARD_W - 0.35 * cm) - barcode_area_x
         barcode_x = barcode_area_x + max(0.0, (barcode_area_w - barcode.width) / 2)
@@ -388,3 +391,4 @@ def _styled_table(rows: list[list[str]], h_align: str = "RIGHT") -> Table:
         )
     )
     return table
+

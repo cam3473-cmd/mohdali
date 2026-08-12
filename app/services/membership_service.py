@@ -13,6 +13,30 @@ class MembershipError(Exception):
     pass
 
 
+def _check_unique_fields(
+    session: Session,
+    member_id: int | None,
+    membership_number: str | None,
+    national_id_or_cr: str | None,
+) -> None:
+    """يتحقق أن رقم العضوية والسجل المدني غير مستخدمين لعضو آخر، ويرفع رسالة عربية واضحة عند التعارض
+    بدلًا من ترك خطأ قاعدة البيانات الخام يصل للواجهة ويُعطّل الجلسة."""
+    if membership_number:
+        query = session.query(Member).filter(Member.membership_number == membership_number)
+        if member_id is not None:
+            query = query.filter(Member.id != member_id)
+        conflict = query.first()
+        if conflict is not None:
+            raise MembershipError(f"رقم العضوية \"{membership_number}\" مستخدم بالفعل للعضو: {conflict.full_name}")
+    if national_id_or_cr:
+        query = session.query(Member).filter(Member.national_id_or_cr == national_id_or_cr)
+        if member_id is not None:
+            query = query.filter(Member.id != member_id)
+        conflict = query.first()
+        if conflict is not None:
+            raise MembershipError(f"رقم الهوية/السجل \"{national_id_or_cr}\" مستخدم بالفعل للعضو: {conflict.full_name}")
+
+
 def submit_membership_request(
     session: Session,
     actor: User,
@@ -33,6 +57,7 @@ def submit_membership_request(
     is_founder: bool = False,
     notes: str | None = None,
 ) -> Member:
+    _check_unique_fields(session, None, membership_number, national_id_or_cr)
     member = Member(
         full_name=full_name,
         membership_number=membership_number,
@@ -111,9 +136,16 @@ def delete_member(session: Session, actor: User, member: Member) -> None:
 
 
 def update_member(session: Session, actor: User, member: Member, **fields) -> Member:
-    for key, value in fields.items():
+    for key in fields:
         if not hasattr(member, key):
             raise MembershipError(f"حقل غير معروف: {key}")
+    _check_unique_fields(
+        session,
+        member.id,
+        fields.get("membership_number", member.membership_number),
+        fields.get("national_id_or_cr", member.national_id_or_cr),
+    )
+    for key, value in fields.items():
         setattr(member, key, value)
     log_action(session, actor, "update_member", "member", member.id)
     session.commit()
