@@ -17,6 +17,26 @@ function serverRoot() {
   return app.isPackaged ? path.join(process.resourcesPath, "server") : path.join(__dirname, "..", "server");
 }
 
+// جذر يحتوي node_modules الجذرية للمشروع (تُنشئها npm workspaces بتجميع الحزم
+// المشتركة هناك بدل تكرارها داخل كل حزمة فرعية)
+function monorepoRoot() {
+  return app.isPackaged ? process.resourcesPath : path.join(__dirname, "..");
+}
+
+// تبحث عن حزمة ضمن node_modules الخاصة بـ server أولاً، ثم الجذر المشترك،
+// لأن npm workspaces قد ترفع الحزم المشتركة (مثل أداة Prisma) إلى الجذر
+function resolveNodeModulesPath(relativePath) {
+  const candidates = [
+    path.join(serverRoot(), "node_modules", relativePath),
+    path.join(monorepoRoot(), "node_modules", relativePath),
+  ];
+  const found = candidates.find((c) => fs.existsSync(c));
+  if (!found) {
+    throw new Error(`لم يتم العثور على ${relativePath}. المسارات التي تم التحقق منها:\n${candidates.join("\n")}`);
+  }
+  return found;
+}
+
 function getDatabasePath() {
   if (!app.isPackaged) {
     return path.join(serverRoot(), "prisma", "dev.db");
@@ -60,12 +80,8 @@ function runNodeScript(scriptPath, args, env) {
 async function prepareDatabase(databaseUrl, dbFilePath) {
   const isFreshDb = !fs.existsSync(dbFilePath);
   const root = serverRoot();
-  const prismaCli = path.join(root, "node_modules", "prisma", "build", "index.js");
+  const prismaCli = resolveNodeModulesPath(path.join("prisma", "build", "index.js"));
   const schemaPath = path.join(root, "prisma", "schema.prisma");
-
-  if (!fs.existsSync(prismaCli)) {
-    throw new Error(`لم يتم العثور على أداة Prisma في المسار المتوقع: ${prismaCli}`);
-  }
 
   await runNodeScript(prismaCli, ["migrate", "deploy", "--schema", schemaPath], { DATABASE_URL: databaseUrl });
 
