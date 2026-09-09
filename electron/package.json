@@ -13,8 +13,8 @@
   },
   "build": {
     "appId": "sa.org.jamiyat-albirr-alsulail.app",
-    "productName": "نظام إدارة المستفيدين - جمعية البر بالسليل",
-    "files": ["main.js", "preload.js"],
+    "productName": "AlSulailCharityBeneficiaries",
+    "files": ["main.js"],
     "extraResources": [
       { "from": "../server/dist", "to": "server/dist" },
       { "from": "../server/prisma", "to": "server/prisma" },
