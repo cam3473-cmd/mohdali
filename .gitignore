@@ -2,3 +2,28 @@
 *.css.map
 *.sass.map
 *.scss.map
+
+# Node
+node_modules/
+npm-debug.log*
+dist/
+build/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+
+# Prisma / SQLite database
+server/prisma/dev.db
+server/prisma/dev.db-journal
+*.db
+*.db-journal
+
+# Electron
+electron/dist/
+electron/out/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,134 @@
+// نظام إدارة بيانات المستفيدين والدعوم - جمعية البر الخيرية بمحافظة السليل
+// ملاحظة: SQLite لا يدعم الأنواع Enum في Prisma، لذا تُستخدم حقول نصية (String)
+// والتحقق من القيم المسموح بها يتم عبر Zod في طبقة الـ API (server/src/routes).
+// القيم المسموح بها لكل حقل موثّقة بجانب الحقل أدناه.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// المستخدمون (موظفو الجمعية)
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  fullName     String
+  passwordHash String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  createdBeneficiaries Beneficiary[]      @relation("BeneficiaryCreatedBy")
+  cashSupports         CashSupport[]      @relation("CashSupportCreatedBy")
+  inKindSupports       InKindSupport[]    @relation("InKindSupportCreatedBy")
+  courses              Course[]           @relation("CourseCreatedBy")
+  enrollments          CourseEnrollment[] @relation("EnrollmentCreatedBy")
+}
+
+// المستفيدون
+model Beneficiary {
+  id                 String    @id @default(cuid())
+  nationalId         String    @unique // رقم الهوية الوطنية
+  fullName           String
+  gender             String // MALE | FEMALE
+  birthDate          DateTime?
+  maritalStatus      String? // SINGLE | MARRIED | DIVORCED | WIDOWED
+  familyMembersCount Int? // عدد أفراد الأسرة
+  monthlyIncome      Float? // الدخل الشهري
+  neighborhood       String? // الحي / الموقع
+  address            String?
+  phone              String?
+  needCategory       String? // تصنيف الاحتياج (احتياج مادي، تأهيلي، ...)
+  fileStatus         String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdById        String?
+  createdBy          User?     @relation("BeneficiaryCreatedBy", fields: [createdById], references: [id])
+
+  cashSupports   CashSupport[]
+  inKindSupports InKindSupport[]
+  enrollments    CourseEnrollment[]
+
+  @@index([fullName])
+  @@index([fileStatus])
+}
+
+// الدعم النقدي
+model CashSupport {
+  id            String      @id @default(cuid())
+  beneficiaryId String
+  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  amount        Float
+  type          String      @default("MONTHLY") // MONTHLY | EMERGENCY | SEASONAL | OTHER
+  supportDate   DateTime
+  year          Int // السنة المالية للدعم
+  status        String      @default("DISBURSED") // PENDING | DISBURSED | CANCELLED
+  notes         String?
+  createdAt     DateTime    @default(now())
+  createdById   String?
+  createdBy     User?       @relation("CashSupportCreatedBy", fields: [createdById], references: [id])
+
+  @@index([beneficiaryId])
+  @@index([year])
+}
+
+// الدعم العيني
+model InKindSupport {
+  id             String      @id @default(cuid())
+  beneficiaryId  String
+  beneficiary    Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  category       String // FOOD | CLOTHING | FURNITURE | DEVICES | MEDICAL | SCHOOL | OTHER
+  description    String // وصف الصنف
+  quantity       Int         @default(1)
+  estimatedValue Float? // القيمة التقديرية
+  supportDate    DateTime
+  year           Int
+  notes          String?
+  createdAt      DateTime    @default(now())
+  createdById    String?
+  createdBy      User?       @relation("InKindSupportCreatedBy", fields: [createdById], references: [id])
+
+  @@index([beneficiaryId])
+  @@index([year])
+}
+
+// الدورات التدريبية
+model Course {
+  id          String    @id @default(cuid())
+  title       String
+  category    String // COMPUTER | LANGUAGES | AI | LIFE_SKILLS | OTHER
+  trainer     String?
+  startDate   DateTime
+  endDate     DateTime?
+  seatsCount  Int?
+  location    String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  createdById String?
+  createdBy   User?     @relation("CourseCreatedBy", fields: [createdById], references: [id])
+
+  enrollments CourseEnrollment[]
+
+  @@index([category])
+}
+
+// تسجيل المستفيدين في الدورات
+model CourseEnrollment {
+  id                String      @id @default(cuid())
+  beneficiaryId     String
+  beneficiary       Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  courseId          String
+  course            Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status            String      @default("ENROLLED") // ENROLLED | COMPLETED | DROPPED
+  certificateIssued Boolean     @default(false)
+  notes             String?
+  createdAt         DateTime    @default(now())
+  createdById       String?
+  createdBy         User?       @relation("EnrollmentCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([beneficiaryId, courseId])
+}

@@ -1,0 +1,29 @@
+{
+  "name": "electron",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^32.1.0",
+    "electron-builder": "^25.0.5"
+  },
+  "build": {
+    "appId": "sa.org.jamiyat-albirr-alsulail.app",
+    "productName": "نظام إدارة المستفيدين - جمعية البر بالسليل",
+    "files": ["main.js", "preload.js"],
+    "extraResources": [
+      { "from": "../server/dist", "to": "server/dist" },
+      { "from": "../server/prisma", "to": "server/prisma" },
+      { "from": "../server/node_modules", "to": "server/node_modules" },
+      { "from": "../web/dist", "to": "web/dist" }
+    ],
+    "asarUnpack": ["**/*.node", "**/@prisma/**", "**/.prisma/**"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}
