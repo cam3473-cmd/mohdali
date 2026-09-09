@@ -3,6 +3,10 @@ const path = require("path");
 const fs = require("fs");
 const { fork, spawn } = require("child_process");
 
+// اسم ثابت ومعروف مسبقاً حتى يكون مسار بيانات المستخدم (وملف السجل) متوقعاً دائماً،
+// بغض النظر عن كيفية تعيين electron-builder لاسم الحزمة داخلياً
+app.setName("AlSulailCharityBeneficiaries");
+
 const PORT = 4000;
 
 let serverProcess;
