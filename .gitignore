@@ -13,6 +13,7 @@ build/
 # Env
 .env
 .env.local
+.jwt-secret
 
 # Prisma / SQLite database
 server/prisma/dev.db

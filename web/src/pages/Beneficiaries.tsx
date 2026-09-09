@@ -11,9 +11,11 @@ interface Beneficiary {
   familyMembersCount?: number | null;
   monthlyIncome?: number | null;
   neighborhood?: string | null;
+  address?: string | null;
   phone?: string | null;
   needCategory?: string | null;
   fileStatus: "ACTIVE" | "SUSPENDED" | "CLOSED";
+  notes?: string | null;
 }
 
 const FILE_STATUS_LABEL: Record<string, string> = { ACTIVE: "نشط", SUSPENDED: "موقوف", CLOSED: "مغلق" };
@@ -76,11 +78,11 @@ export default function Beneficiaries() {
       familyMembersCount: b.familyMembersCount?.toString() ?? "",
       monthlyIncome: b.monthlyIncome?.toString() ?? "",
       neighborhood: b.neighborhood ?? "",
-      address: "",
+      address: b.address ?? "",
       phone: b.phone ?? "",
       needCategory: b.needCategory ?? "",
       fileStatus: b.fileStatus,
-      notes: "",
+      notes: b.notes ?? "",
     });
     setEditingId(b.id);
     setError("");

@@ -108,14 +108,24 @@ coursesRouter.post("/:id/enrollments", async (req, res) => {
     return res.status(409).json({ error: "المستفيد مسجل مسبقاً في هذه الدورة" });
   }
 
-  const created = await prisma.courseEnrollment.create({
-    data: {
-      ...data,
-      courseId: req.params.id,
-      createdById: req.user!.userId,
-    },
-  });
-  res.status(201).json(created);
+  try {
+    const created = await prisma.courseEnrollment.create({
+      data: {
+        ...data,
+        courseId: req.params.id,
+        createdById: req.user!.userId,
+      },
+    });
+    res.status(201).json(created);
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      return res.status(409).json({ error: "المستفيد مسجل مسبقاً في هذه الدورة" });
+    }
+    if (err?.code === "P2003") {
+      return res.status(400).json({ error: "الدورة أو المستفيد غير موجود" });
+    }
+    res.status(400).json({ error: "تعذر تسجيل المستفيد في الدورة" });
+  }
 });
 
 coursesRouter.put("/enrollments/:enrollmentId", async (req, res) => {

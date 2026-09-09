@@ -102,7 +102,10 @@ beneficiariesRouter.put("/:id", async (req, res) => {
       },
     });
     res.json(updated);
-  } catch {
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      return res.status(409).json({ error: "رقم الهوية مسجل مسبقاً لمستفيد آخر" });
+    }
     res.status(404).json({ error: "المستفيد غير موجود" });
   }
 });

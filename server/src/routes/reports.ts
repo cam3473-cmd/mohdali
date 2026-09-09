@@ -20,6 +20,11 @@ const CASH_TYPE_AR: Record<string, string> = {
   SEASONAL: "موسمي",
   OTHER: "أخرى",
 };
+const DISBURSEMENT_STATUS_AR: Record<string, string> = {
+  PENDING: "معلّق",
+  DISBURSED: "مصروف",
+  CANCELLED: "ملغى",
+};
 const IN_KIND_CATEGORY_AR: Record<string, string> = {
   FOOD: "مواد غذائية",
   CLOTHING: "ملابس",
@@ -68,7 +73,7 @@ reportsRouter.get("/summary", async (req, res) => {
   const [beneficiariesCount, activeCount, cash, inKind, coursesCount, enrollmentsCount] = await Promise.all([
     prisma.beneficiary.count(),
     prisma.beneficiary.count({ where: { fileStatus: "ACTIVE" } }),
-    prisma.cashSupport.aggregate({ where: { year: y }, _sum: { amount: true }, _count: true }),
+    prisma.cashSupport.aggregate({ where: { year: y, status: "DISBURSED" }, _sum: { amount: true }, _count: true }),
     prisma.inKindSupport.aggregate({ where: { year: y }, _sum: { estimatedValue: true }, _count: true }),
     prisma.course.count(),
     prisma.courseEnrollment.count(),
@@ -146,6 +151,7 @@ reportsRouter.get("/cash-supports.xlsx", async (req, res) => {
     { header: "اسم المستفيد", key: "fullName", width: 26 },
     { header: "نوع الدعم", key: "type", width: 12 },
     { header: "المبلغ (ريال)", key: "amount", width: 14 },
+    { header: "الحالة", key: "status", width: 12 },
     { header: "تاريخ الصرف", key: "supportDate", width: 14 },
     { header: "السنة", key: "year", width: 8 },
     { header: "ملاحظات", key: "notes", width: 24 },
@@ -156,13 +162,16 @@ reportsRouter.get("/cash-supports.xlsx", async (req, res) => {
       fullName: c.beneficiary.fullName,
       type: CASH_TYPE_AR[c.type] ?? c.type,
       amount: c.amount,
+      status: DISBURSEMENT_STATUS_AR[c.status] ?? c.status,
       supportDate: c.supportDate.toISOString().slice(0, 10),
       year: c.year,
       notes: c.notes ?? "",
     });
   });
   sheet.addRow({});
-  const totalRow = sheet.addRow({ fullName: "الإجمالي", amount: items.reduce((s, c) => s + c.amount, 0) });
+  // الإجمالي يشمل المبالغ المصروفة فعلياً فقط (يستثني الطلبات المعلّقة أو الملغاة)
+  const disbursedTotal = items.filter((c) => c.status === "DISBURSED").reduce((s, c) => s + c.amount, 0);
+  const totalRow = sheet.addRow({ fullName: "إجمالي المصروف فعلياً", amount: disbursedTotal });
   totalRow.font = { bold: true };
   styleHeader(sheet);
   await sendWorkbook(res, workbook, "تقرير_الدعم_النقدي.xlsx");
@@ -271,7 +280,8 @@ reportsRouter.get("/annual-summary.xlsx", async (req, res) => {
 
   const [beneficiaries, cash, inKind, courses] = await Promise.all([
     prisma.beneficiary.findMany(),
-    prisma.cashSupport.findMany({ where: { year: y }, include: { beneficiary: true } }),
+    // يقتصر التقرير الرسمي على المبالغ المصروفة فعلياً، مع استبعاد الطلبات المعلّقة أو الملغاة
+    prisma.cashSupport.findMany({ where: { year: y, status: "DISBURSED" }, include: { beneficiary: true } }),
     prisma.inKindSupport.findMany({ where: { year: y }, include: { beneficiary: true } }),
     prisma.course.findMany({ include: { enrollments: true } }),
   ]);
@@ -287,8 +297,8 @@ reportsRouter.get("/annual-summary.xlsx", async (req, res) => {
     { label: `السنة`, value: y },
     { label: "إجمالي عدد المستفيدين المسجلين", value: beneficiaries.length },
     { label: "إجمالي عدد المستفيدين النشطين", value: beneficiaries.filter((b) => b.fileStatus === "ACTIVE").length },
-    { label: "إجمالي عدد عمليات الدعم النقدي خلال السنة", value: cash.length },
-    { label: "إجمالي مبالغ الدعم النقدي (ريال)", value: cash.reduce((s, c) => s + c.amount, 0) },
+    { label: "إجمالي عدد عمليات الدعم النقدي المصروفة خلال السنة", value: cash.length },
+    { label: "إجمالي مبالغ الدعم النقدي المصروفة (ريال)", value: cash.reduce((s, c) => s + c.amount, 0) },
     { label: "إجمالي عدد عمليات الدعم العيني خلال السنة", value: inKind.length },
     {
       label: "إجمالي القيمة التقديرية للدعم العيني (ريال)",

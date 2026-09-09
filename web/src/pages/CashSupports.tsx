@@ -65,7 +65,7 @@ export default function CashSupports() {
     load();
   }
 
-  const total = items.reduce((s, c) => s + c.amount, 0);
+  const total = items.filter((c) => c.status === "DISBURSED").reduce((s, c) => s + c.amount, 0);
 
   return (
     <div>
@@ -85,7 +85,7 @@ export default function CashSupports() {
         <label>السنة:</label>
         <input type="number" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: 100 }} />
         <span style={{ marginRight: "auto", color: "var(--muted)" }}>
-          الإجمالي: <strong>{total.toLocaleString("ar-SA")} ريال</strong>
+          إجمالي المصروف: <strong>{total.toLocaleString("ar-SA")} ريال</strong>
         </span>
       </div>
 
