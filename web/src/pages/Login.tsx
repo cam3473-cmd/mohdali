@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
 import { api, apiErrorMessage } from "../lib/api";
+import Logo from "../components/Logo";
 
 export default function Login() {
   const { login } = useAuth();
@@ -33,6 +34,9 @@ export default function Login() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <Logo size={72} />
+        </div>
         <h1>جمعية البر الخيرية بمحافظة السليل</h1>
         <p className="subtitle">نظام إدارة بيانات المستفيدين والدعوم</p>
         {error && <div className="error-banner">{error}</div>}

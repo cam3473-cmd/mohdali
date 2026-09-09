@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import Logo from "./Logo";
 
 const links = [
   { to: "/", label: "لوحة التحكم", end: true },
@@ -17,6 +18,9 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+          <Logo size={64} />
+        </div>
         <h1>
           جمعية البر الخيرية
           <br />
