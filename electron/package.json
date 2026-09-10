@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "predist": "node scripts/prepare-server-deps.js",
     "dist": "electron-builder"
   },
   "devDependencies": {
@@ -18,8 +19,7 @@
     "extraResources": [
       { "from": "../server/dist", "to": "server/dist" },
       { "from": "../server/prisma", "to": "server/prisma" },
-      { "from": "../server/node_modules", "to": "server/node_modules" },
-      { "from": "../node_modules", "to": "node_modules" },
+      { "from": ".server-deploy/node_modules", "to": "server/node_modules" },
       { "from": "../web/dist", "to": "web/dist" }
     ],
     "asarUnpack": ["**/*.node", "**/@prisma/**", "**/.prisma/**"],

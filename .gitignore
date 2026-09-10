@@ -24,6 +24,7 @@ server/prisma/dev.db-journal
 # Electron
 electron/dist/
 electron/out/
+electron/.server-deploy/
 
 # OS
 .DS_Store
