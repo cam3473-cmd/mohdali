@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 
@@ -45,6 +45,15 @@ export default function Beneficiaries() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<typeof emptyForm>(emptyForm);
   const [error, setError] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    insertedCount: number;
+    skippedDuplicates: { row: number; nationalId: string }[];
+    errors: { row: number; message: string }[];
+  } | null>(null);
+  const [importError, setImportError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -125,14 +134,51 @@ export default function Beneficiaries() {
     load();
   }
 
+  function openImportPicker() {
+    setImportError("");
+    setImportResult(null);
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportError("");
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/beneficiaries/import", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setImportResult(res.data);
+      load();
+    } catch (err) {
+      setImportError(apiErrorMessage(err));
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
         <h2>المستفيدون</h2>
-        <button className="btn" onClick={openAdd}>
-          + إضافة مستفيد
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input ref={fileInputRef} type="file" accept=".xlsx" hidden onChange={handleFileSelected} />
+          <button className="btn secondary" onClick={openImportPicker} disabled={importing}>
+            {importing ? "جارٍ الاستيراد..." : "استيراد من إكسل"}
+          </button>
+          <button className="btn" onClick={openAdd}>
+            + إضافة مستفيد
+          </button>
+        </div>
       </div>
+
+      {importError && <div className="error-banner">{importError}</div>}
 
       <div className="toolbar">
         <input placeholder="بحث بالاسم أو رقم الهوية أو الجوال..." value={q} onChange={(e) => setQ(e.target.value)} />
@@ -279,6 +325,46 @@ export default function Beneficiaries() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {importResult && (
+        <div className="modal-backdrop" onClick={() => setImportResult(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>نتيجة الاستيراد</h3>
+            <p>
+              تمت إضافة <strong>{importResult.insertedCount}</strong> مستفيد جديد.
+              {importResult.skippedDuplicates.length > 0 && (
+                <> تم تجاوز <strong>{importResult.skippedDuplicates.length}</strong> صف لوجود رقم هوية مكرر مسبقاً.</>
+              )}
+            </p>
+            {importResult.errors.length > 0 && (
+              <>
+                <p style={{ color: "var(--danger)", fontWeight: 600 }}>صفوف بها أخطاء ({importResult.errors.length}):</p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>رقم الصف</th>
+                      <th>الخطأ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importResult.errors.map((e, i) => (
+                      <tr key={i}>
+                        <td>{e.row}</td>
+                        <td>{e.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+            <div className="modal-actions">
+              <button type="button" className="btn" onClick={() => setImportResult(null)}>
+                إغلاق
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

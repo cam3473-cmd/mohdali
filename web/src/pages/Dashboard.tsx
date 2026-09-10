@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { SUPPORT_CATEGORY_LABEL } from "../lib/constants";
+
+interface CategoryBreakdown {
+  category: string;
+  categoryLabel: string;
+  total: number;
+  count: number;
+}
 
 interface Summary {
   year: number;
   beneficiariesCount: number;
   activeCount: number;
-  cashTotal: number;
-  cashCount: number;
-  inKindTotal: number;
-  inKindCount: number;
+  supportTotal: number;
+  supportCount: number;
+  byCategory: CategoryBreakdown[];
   coursesCount: number;
   enrollmentsCount: number;
 }
@@ -31,40 +38,58 @@ export default function Dashboard() {
       </div>
       {loading && <p className="loading">جارٍ التحميل...</p>}
       {summary && (
-        <div className="stat-grid">
-          <div className="stat-card">
-            <div className="value">{summary.beneficiariesCount}</div>
-            <div className="label">إجمالي المستفيدين</div>
+        <>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="value">{summary.beneficiariesCount}</div>
+              <div className="label">إجمالي المستفيدين</div>
+            </div>
+            <div className="stat-card">
+              <div className="value">{summary.activeCount}</div>
+              <div className="label">مستفيدون نشطون</div>
+            </div>
+            <div className="stat-card">
+              <div className="value">{summary.supportTotal.toLocaleString("ar-SA")} ريال</div>
+              <div className="label">إجمالي الدعم المصروف ({summary.year})</div>
+            </div>
+            <div className="stat-card">
+              <div className="value">{summary.supportCount}</div>
+              <div className="label">عمليات دعم مصروفة ({summary.year})</div>
+            </div>
+            <div className="stat-card">
+              <div className="value">{summary.coursesCount}</div>
+              <div className="label">الدورات التدريبية</div>
+            </div>
+            <div className="stat-card">
+              <div className="value">{summary.enrollmentsCount}</div>
+              <div className="label">تسجيلات في الدورات</div>
+            </div>
           </div>
-          <div className="stat-card">
-            <div className="value">{summary.activeCount}</div>
-            <div className="label">مستفيدون نشطون</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.cashTotal.toLocaleString("ar-SA")} ريال</div>
-            <div className="label">إجمالي الدعم النقدي ({summary.year})</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.cashCount}</div>
-            <div className="label">عمليات دعم نقدي ({summary.year})</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.inKindTotal.toLocaleString("ar-SA")} ريال</div>
-            <div className="label">القيمة التقديرية للدعم العيني ({summary.year})</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.inKindCount}</div>
-            <div className="label">عمليات دعم عيني ({summary.year})</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.coursesCount}</div>
-            <div className="label">الدورات التدريبية</div>
-          </div>
-          <div className="stat-card">
-            <div className="value">{summary.enrollmentsCount}</div>
-            <div className="label">تسجيلات في الدورات</div>
-          </div>
-        </div>
+
+          {summary.byCategory.length > 0 && (
+            <div className="card">
+              <h3 style={{ marginTop: 0, fontSize: 15 }}>الدعم حسب النوع ({summary.year})</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>النوع</th>
+                    <th>عدد العمليات</th>
+                    <th>الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.byCategory.map((c) => (
+                    <tr key={c.category}>
+                      <td>{SUPPORT_CATEGORY_LABEL[c.category] ?? c.categoryLabel}</td>
+                      <td>{c.count}</td>
+                      <td>{c.total.toLocaleString("ar-SA")} ريال</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

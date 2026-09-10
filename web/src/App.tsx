@@ -5,8 +5,10 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Beneficiaries from "./pages/Beneficiaries";
 import BeneficiaryDetail from "./pages/BeneficiaryDetail";
-import CashSupports from "./pages/CashSupports";
-import InKindSupports from "./pages/InKindSupports";
+import BeneficiaryCard from "./pages/BeneficiaryCard";
+import Supports from "./pages/Supports";
+import Campaigns from "./pages/Campaigns";
+import CampaignDetail from "./pages/CampaignDetail";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Reports from "./pages/Reports";
@@ -23,6 +25,14 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route
+        path="/beneficiaries/:id/card"
+        element={
+          <RequireAuth>
+            <BeneficiaryCard />
+          </RequireAuth>
+        }
+      />
+      <Route
         element={
           <RequireAuth>
             <Layout />
@@ -32,8 +42,9 @@ function AppRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/beneficiaries" element={<Beneficiaries />} />
         <Route path="/beneficiaries/:id" element={<BeneficiaryDetail />} />
-        <Route path="/cash-supports" element={<CashSupports />} />
-        <Route path="/in-kind-supports" element={<InKindSupports />} />
+        <Route path="/supports" element={<Supports />} />
+        <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/campaigns/:id" element={<CampaignDetail />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
         <Route path="/reports" element={<Reports />} />

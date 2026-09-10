@@ -22,8 +22,8 @@ model User {
   createdAt    DateTime @default(now())
 
   createdBeneficiaries Beneficiary[]      @relation("BeneficiaryCreatedBy")
-  cashSupports         CashSupport[]      @relation("CashSupportCreatedBy")
-  inKindSupports       InKindSupport[]    @relation("InKindSupportCreatedBy")
+  supports             Support[]          @relation("SupportCreatedBy")
+  campaigns            SupportCampaign[]  @relation("CampaignCreatedBy")
   courses              Course[]           @relation("CourseCreatedBy")
   enrollments          CourseEnrollment[] @relation("EnrollmentCreatedBy")
 }
@@ -49,51 +49,52 @@ model Beneficiary {
   createdById        String?
   createdBy          User?     @relation("BeneficiaryCreatedBy", fields: [createdById], references: [id])
 
-  cashSupports   CashSupport[]
-  inKindSupports InKindSupport[]
-  enrollments    CourseEnrollment[]
+  supports    Support[]
+  enrollments CourseEnrollment[]
 
   @@index([fullName])
   @@index([fileStatus])
 }
 
-// الدعم النقدي
-model CashSupport {
-  id            String      @id @default(cuid())
+// الدعم (نموذج موحّد لجميع أنواع الدعم)
+model Support {
+  id            String           @id @default(cuid())
   beneficiaryId String
-  beneficiary   Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
-  amount        Float
-  type          String      @default("MONTHLY") // MONTHLY | EMERGENCY | SEASONAL | OTHER
+  beneficiary   Beneficiary      @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  category      String // IN_KIND | CASH | HOUSING | ECONOMIC | HEALTH | EDUCATIONAL
+  amount        Float? // القيمة النقدية أو التقديرية (إن وُجدت)
+  description   String? // وصف الصنف (للدعم العيني بشكل أساسي)
+  quantity      Int? // الكمية (للدعم العيني)
   supportDate   DateTime
   year          Int // السنة المالية للدعم
-  status        String      @default("DISBURSED") // PENDING | DISBURSED | CANCELLED
+  status        String           @default("DISBURSED") // PENDING | DISBURSED | CANCELLED
   notes         String?
-  createdAt     DateTime    @default(now())
+  campaignId    String?
+  campaign      SupportCampaign? @relation(fields: [campaignId], references: [id])
+  createdAt     DateTime         @default(now())
   createdById   String?
-  createdBy     User?       @relation("CashSupportCreatedBy", fields: [createdById], references: [id])
+  createdBy     User?            @relation("SupportCreatedBy", fields: [createdById], references: [id])
 
   @@index([beneficiaryId])
   @@index([year])
+  @@index([category])
 }
 
-// الدعم العيني
-model InKindSupport {
-  id             String      @id @default(cuid())
-  beneficiaryId  String
-  beneficiary    Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
-  category       String // FOOD | CLOTHING | FURNITURE | DEVICES | MEDICAL | SCHOOL | OTHER
-  description    String // وصف الصنف
-  quantity       Int         @default(1)
-  estimatedValue Float? // القيمة التقديرية
-  supportDate    DateTime
-  year           Int
-  notes          String?
-  createdAt      DateTime    @default(now())
-  createdById    String?
-  createdBy      User?       @relation("InKindSupportCreatedBy", fields: [createdById], references: [id])
+// حملة/دفعة توزيع دعم عادل حسب عدد أفراد الأسرة (أداة اختيارية)
+model SupportCampaign {
+  id               String   @id @default(cuid())
+  title            String // اسم الحملة (مثال: توزيع دعم شتاء 1447)
+  category         String // نفس تصنيفات الدعم أعلاه
+  perPersonRate    Float? // نصيب الفرد الواحد من الأسرة (الصيغة الافتراضية للتوزيع)
+  totalBudget      Float? // إجمالي ميزانية الحملة (اختياري، للعرض فقط)
+  distributionDate DateTime
+  year             Int
+  notes            String?
+  createdAt        DateTime @default(now())
+  createdById      String?
+  createdBy        User?    @relation("CampaignCreatedBy", fields: [createdById], references: [id])
 
-  @@index([beneficiaryId])
-  @@index([year])
+  supports Support[]
 }
 
 // الدورات التدريبية

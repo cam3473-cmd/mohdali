@@ -14,25 +14,18 @@ const MARITAL_AR: Record<string, string> = {
   WIDOWED: "أرمل",
 };
 const FILE_STATUS_AR: Record<string, string> = { ACTIVE: "نشط", SUSPENDED: "موقوف", CLOSED: "مغلق" };
-const CASH_TYPE_AR: Record<string, string> = {
-  MONTHLY: "شهري",
-  EMERGENCY: "طارئ",
-  SEASONAL: "موسمي",
-  OTHER: "أخرى",
+const SUPPORT_CATEGORY_AR: Record<string, string> = {
+  IN_KIND: "عيني",
+  CASH: "نقدي",
+  HOUSING: "سكني",
+  ECONOMIC: "اقتصادي",
+  HEALTH: "صحي",
+  EDUCATIONAL: "تعليمي",
 };
 const DISBURSEMENT_STATUS_AR: Record<string, string> = {
   PENDING: "معلّق",
   DISBURSED: "مصروف",
   CANCELLED: "ملغى",
-};
-const IN_KIND_CATEGORY_AR: Record<string, string> = {
-  FOOD: "مواد غذائية",
-  CLOTHING: "ملابس",
-  FURNITURE: "أثاث",
-  DEVICES: "أجهزة",
-  MEDICAL: "مستلزمات طبية",
-  SCHOOL: "مستلزمات مدرسية",
-  OTHER: "أخرى",
 };
 const COURSE_CATEGORY_AR: Record<string, string> = {
   COMPUTER: "حاسب آلي",
@@ -70,11 +63,16 @@ reportsRouter.get("/summary", async (req, res) => {
   const { year } = req.query as Record<string, string>;
   const y = year ? parseInt(year, 10) : new Date().getFullYear();
 
-  const [beneficiariesCount, activeCount, cash, inKind, coursesCount, enrollmentsCount] = await Promise.all([
+  const [beneficiariesCount, activeCount, disbursed, byCategory, coursesCount, enrollmentsCount] = await Promise.all([
     prisma.beneficiary.count(),
     prisma.beneficiary.count({ where: { fileStatus: "ACTIVE" } }),
-    prisma.cashSupport.aggregate({ where: { year: y, status: "DISBURSED" }, _sum: { amount: true }, _count: true }),
-    prisma.inKindSupport.aggregate({ where: { year: y }, _sum: { estimatedValue: true }, _count: true }),
+    prisma.support.aggregate({ where: { year: y, status: "DISBURSED" }, _sum: { amount: true }, _count: true }),
+    prisma.support.groupBy({
+      by: ["category"],
+      where: { year: y, status: "DISBURSED" },
+      _sum: { amount: true },
+      _count: true,
+    }),
     prisma.course.count(),
     prisma.courseEnrollment.count(),
   ]);
@@ -83,10 +81,14 @@ reportsRouter.get("/summary", async (req, res) => {
     year: y,
     beneficiariesCount,
     activeCount,
-    cashTotal: cash._sum.amount ?? 0,
-    cashCount: cash._count,
-    inKindTotal: inKind._sum.estimatedValue ?? 0,
-    inKindCount: inKind._count,
+    supportTotal: disbursed._sum.amount ?? 0,
+    supportCount: disbursed._count,
+    byCategory: byCategory.map((c) => ({
+      category: c.category,
+      categoryLabel: SUPPORT_CATEGORY_AR[c.category] ?? c.category,
+      total: c._sum.amount ?? 0,
+      count: c._count,
+    })),
     coursesCount,
     enrollmentsCount,
   });
@@ -132,89 +134,54 @@ reportsRouter.get("/beneficiaries.xlsx", async (req, res) => {
   await sendWorkbook(res, workbook, "تقرير_المستفيدين.xlsx");
 });
 
-// تقرير الدعم النقدي السنوي
-reportsRouter.get("/cash-supports.xlsx", async (req, res) => {
-  const { year } = req.query as Record<string, string>;
+// تقرير الدعوم الموحّد (يمكن تصفيته حسب السنة و/أو التصنيف)
+reportsRouter.get("/supports.xlsx", async (req, res) => {
+  const { year, category } = req.query as Record<string, string>;
   const where: any = {};
   if (year) where.year = parseInt(year, 10);
+  if (category) where.category = category;
 
-  const items = await prisma.cashSupport.findMany({
+  const items = await prisma.support.findMany({
     where,
     include: { beneficiary: true },
     orderBy: { supportDate: "asc" },
   });
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("الدعم النقدي");
+  const sheet = workbook.addWorksheet("الدعوم");
   sheet.columns = [
     { header: "رقم الهوية", key: "nationalId", width: 16 },
     { header: "اسم المستفيد", key: "fullName", width: 26 },
-    { header: "نوع الدعم", key: "type", width: 12 },
+    { header: "نوع الدعم", key: "category", width: 12 },
     { header: "المبلغ (ريال)", key: "amount", width: 14 },
+    { header: "الوصف", key: "description", width: 24 },
+    { header: "الكمية", key: "quantity", width: 10 },
     { header: "الحالة", key: "status", width: 12 },
     { header: "تاريخ الصرف", key: "supportDate", width: 14 },
     { header: "السنة", key: "year", width: 8 },
     { header: "ملاحظات", key: "notes", width: 24 },
   ];
-  items.forEach((c) => {
-    sheet.addRow({
-      nationalId: c.beneficiary.nationalId,
-      fullName: c.beneficiary.fullName,
-      type: CASH_TYPE_AR[c.type] ?? c.type,
-      amount: c.amount,
-      status: DISBURSEMENT_STATUS_AR[c.status] ?? c.status,
-      supportDate: c.supportDate.toISOString().slice(0, 10),
-      year: c.year,
-      notes: c.notes ?? "",
-    });
-  });
-  sheet.addRow({});
-  // الإجمالي يشمل المبالغ المصروفة فعلياً فقط (يستثني الطلبات المعلّقة أو الملغاة)
-  const disbursedTotal = items.filter((c) => c.status === "DISBURSED").reduce((s, c) => s + c.amount, 0);
-  const totalRow = sheet.addRow({ fullName: "إجمالي المصروف فعلياً", amount: disbursedTotal });
-  totalRow.font = { bold: true };
-  styleHeader(sheet);
-  await sendWorkbook(res, workbook, "تقرير_الدعم_النقدي.xlsx");
-});
-
-// تقرير الدعم العيني السنوي
-reportsRouter.get("/in-kind-supports.xlsx", async (req, res) => {
-  const { year } = req.query as Record<string, string>;
-  const where: any = {};
-  if (year) where.year = parseInt(year, 10);
-
-  const items = await prisma.inKindSupport.findMany({
-    where,
-    include: { beneficiary: true },
-    orderBy: { supportDate: "asc" },
-  });
-
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("الدعم العيني");
-  sheet.columns = [
-    { header: "رقم الهوية", key: "nationalId", width: 16 },
-    { header: "اسم المستفيد", key: "fullName", width: 26 },
-    { header: "التصنيف", key: "category", width: 16 },
-    { header: "الوصف", key: "description", width: 26 },
-    { header: "الكمية", key: "quantity", width: 10 },
-    { header: "القيمة التقديرية", key: "estimatedValue", width: 16 },
-    { header: "تاريخ التسليم", key: "supportDate", width: 14 },
-    { header: "السنة", key: "year", width: 8 },
-  ];
   items.forEach((s) => {
     sheet.addRow({
       nationalId: s.beneficiary.nationalId,
       fullName: s.beneficiary.fullName,
-      category: IN_KIND_CATEGORY_AR[s.category] ?? s.category,
-      description: s.description,
-      quantity: s.quantity,
-      estimatedValue: s.estimatedValue ?? "",
+      category: SUPPORT_CATEGORY_AR[s.category] ?? s.category,
+      amount: s.amount ?? "",
+      description: s.description ?? "",
+      quantity: s.quantity ?? "",
+      status: DISBURSEMENT_STATUS_AR[s.status] ?? s.status,
       supportDate: s.supportDate.toISOString().slice(0, 10),
       year: s.year,
+      notes: s.notes ?? "",
     });
   });
+  sheet.addRow({});
+  // الإجمالي يشمل المبالغ المصروفة فعلياً فقط (يستثني الطلبات المعلّقة أو الملغاة)
+  const disbursedTotal = items.filter((s) => s.status === "DISBURSED").reduce((sum, s) => sum + (s.amount ?? 0), 0);
+  const totalRow = sheet.addRow({ fullName: "إجمالي المصروف فعلياً (ريال)", amount: disbursedTotal });
+  totalRow.font = { bold: true };
   styleHeader(sheet);
-  await sendWorkbook(res, workbook, "تقرير_الدعم_العيني.xlsx");
+  await sendWorkbook(res, workbook, "تقرير_الدعوم.xlsx");
 });
 
 // تقرير الدورات التدريبية والمستفيدين منها
@@ -278,84 +245,72 @@ reportsRouter.get("/annual-summary.xlsx", async (req, res) => {
   const { year } = req.query as Record<string, string>;
   const y = year ? parseInt(year, 10) : new Date().getFullYear();
 
-  const [beneficiaries, cash, inKind, courses] = await Promise.all([
+  const [beneficiaries, supports, courses] = await Promise.all([
     prisma.beneficiary.findMany(),
-    // يقتصر التقرير الرسمي على المبالغ المصروفة فعلياً، مع استبعاد الطلبات المعلّقة أو الملغاة
-    prisma.cashSupport.findMany({ where: { year: y, status: "DISBURSED" }, include: { beneficiary: true } }),
-    prisma.inKindSupport.findMany({ where: { year: y }, include: { beneficiary: true } }),
+    // يقتصر التقرير الرسمي على الدعم المصروف فعلياً، مع استبعاد الطلبات المعلّقة أو الملغاة
+    prisma.support.findMany({ where: { year: y, status: "DISBURSED" }, include: { beneficiary: true } }),
     prisma.course.findMany({ include: { enrollments: true } }),
   ]);
 
   const workbook = new ExcelJS.Workbook();
 
+  const categoryTotals = new Map<string, { count: number; total: number }>();
+  for (const s of supports) {
+    const entry = categoryTotals.get(s.category) ?? { count: 0, total: 0 };
+    entry.count += 1;
+    entry.total += s.amount ?? 0;
+    categoryTotals.set(s.category, entry);
+  }
+
   const summary = workbook.addWorksheet("ملخص عام");
   summary.columns = [
-    { header: "البيان", key: "label", width: 30 },
+    { header: "البيان", key: "label", width: 34 },
     { header: "القيمة", key: "value", width: 20 },
   ];
-  summary.addRows([
-    { label: `السنة`, value: y },
+  const summaryRows: { label: string; value: number | string }[] = [
+    { label: "السنة", value: y },
     { label: "إجمالي عدد المستفيدين المسجلين", value: beneficiaries.length },
     { label: "إجمالي عدد المستفيدين النشطين", value: beneficiaries.filter((b) => b.fileStatus === "ACTIVE").length },
-    { label: "إجمالي عدد عمليات الدعم النقدي المصروفة خلال السنة", value: cash.length },
-    { label: "إجمالي مبالغ الدعم النقدي المصروفة (ريال)", value: cash.reduce((s, c) => s + c.amount, 0) },
-    { label: "إجمالي عدد عمليات الدعم العيني خلال السنة", value: inKind.length },
-    {
-      label: "إجمالي القيمة التقديرية للدعم العيني (ريال)",
-      value: inKind.reduce((s, i) => s + (i.estimatedValue ?? 0), 0),
-    },
+    { label: "إجمالي عدد عمليات الدعم المصروفة خلال السنة", value: supports.length },
+    { label: "إجمالي قيمة الدعم المصروف (ريال)", value: supports.reduce((s, c) => s + (c.amount ?? 0), 0) },
+  ];
+  for (const [category, { count, total }] of categoryTotals) {
+    const label = SUPPORT_CATEGORY_AR[category] ?? category;
+    summaryRows.push({ label: `عدد عمليات الدعم ${label}`, value: count });
+    summaryRows.push({ label: `قيمة الدعم ${label} (ريال)`, value: total });
+  }
+  summaryRows.push(
     { label: "إجمالي عدد الدورات التدريبية", value: courses.length },
-    {
-      label: "إجمالي عدد المستفيدين المسجلين بالدورات",
-      value: courses.reduce((s, c) => s + c.enrollments.length, 0),
-    },
+    { label: "إجمالي عدد المستفيدين المسجلين بالدورات", value: courses.reduce((s, c) => s + c.enrollments.length, 0) },
     {
       label: "إجمالي عدد المكملين للدورات",
       value: courses.reduce((s, c) => s + c.enrollments.filter((e) => e.status === "COMPLETED").length, 0),
-    },
-  ]);
+    }
+  );
+  summary.addRows(summaryRows);
   styleHeader(summary);
   summary.getColumn("value").alignment = { horizontal: "center" };
 
-  const cashSheet = workbook.addWorksheet(`الدعم النقدي ${y}`);
-  cashSheet.columns = [
+  const supportSheet = workbook.addWorksheet(`الدعوم ${y}`);
+  supportSheet.columns = [
     { header: "رقم الهوية", key: "nationalId", width: 16 },
     { header: "اسم المستفيد", key: "fullName", width: 26 },
-    { header: "نوع الدعم", key: "type", width: 12 },
+    { header: "نوع الدعم", key: "category", width: 12 },
     { header: "المبلغ (ريال)", key: "amount", width: 14 },
+    { header: "الوصف", key: "description", width: 24 },
     { header: "تاريخ الصرف", key: "supportDate", width: 14 },
   ];
-  cash.forEach((c) =>
-    cashSheet.addRow({
-      nationalId: c.beneficiary.nationalId,
-      fullName: c.beneficiary.fullName,
-      type: CASH_TYPE_AR[c.type] ?? c.type,
-      amount: c.amount,
-      supportDate: c.supportDate.toISOString().slice(0, 10),
+  supports.forEach((s) =>
+    supportSheet.addRow({
+      nationalId: s.beneficiary.nationalId,
+      fullName: s.beneficiary.fullName,
+      category: SUPPORT_CATEGORY_AR[s.category] ?? s.category,
+      amount: s.amount ?? "",
+      description: s.description ?? "",
+      supportDate: s.supportDate.toISOString().slice(0, 10),
     })
   );
-  styleHeader(cashSheet);
-
-  const inKindSheet = workbook.addWorksheet(`الدعم العيني ${y}`);
-  inKindSheet.columns = [
-    { header: "رقم الهوية", key: "nationalId", width: 16 },
-    { header: "اسم المستفيد", key: "fullName", width: 26 },
-    { header: "التصنيف", key: "category", width: 16 },
-    { header: "الوصف", key: "description", width: 26 },
-    { header: "القيمة التقديرية", key: "estimatedValue", width: 16 },
-    { header: "التاريخ", key: "supportDate", width: 14 },
-  ];
-  inKind.forEach((i) =>
-    inKindSheet.addRow({
-      nationalId: i.beneficiary.nationalId,
-      fullName: i.beneficiary.fullName,
-      category: IN_KIND_CATEGORY_AR[i.category] ?? i.category,
-      description: i.description,
-      estimatedValue: i.estimatedValue ?? "",
-      supportDate: i.supportDate.toISOString().slice(0, 10),
-    })
-  );
-  styleHeader(inKindSheet);
+  styleHeader(supportSheet);
 
   await sendWorkbook(res, workbook, `التقرير_السنوي_الشامل_${y}.xlsx`);
 });

@@ -5,8 +5,8 @@ import Logo from "./Logo";
 const links = [
   { to: "/", label: "لوحة التحكم", end: true },
   { to: "/beneficiaries", label: "المستفيدون" },
-  { to: "/cash-supports", label: "الدعم النقدي" },
-  { to: "/in-kind-supports", label: "الدعم العيني" },
+  { to: "/supports", label: "الدعوم" },
+  { to: "/campaigns", label: "حملات التوزيع" },
   { to: "/courses", label: "الدورات التدريبية" },
   { to: "/reports", label: "التقارير" },
   { to: "/users", label: "المستخدمون" },

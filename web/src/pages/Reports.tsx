@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { downloadReport } from "../lib/api";
+import { SUPPORT_CATEGORY_LABEL } from "../lib/constants";
 
 const currentYear = new Date().getFullYear();
 
 export default function Reports() {
   const [year, setYear] = useState(String(currentYear));
+  const [category, setCategory] = useState("");
 
   return (
     <div>
@@ -15,7 +17,7 @@ export default function Reports() {
       <div className="card">
         <h3 style={{ marginTop: 0 }}>التقرير السنوي الشامل</h3>
         <p style={{ color: "var(--muted)", fontSize: 14 }}>
-          تقرير موحّد يشمل ملخص المستفيدين والدعم النقدي والعيني لسنة محددة — مناسب للرفع لصندوق دعم الجمعيات والمركز
+          تقرير موحّد يشمل ملخص المستفيدين وجميع أنواع الدعم لسنة محددة — مناسب للرفع لصندوق دعم الجمعيات والمركز
           الوطني لتنمية القطاع غير الربحي ومنصة إحسان.
         </p>
         <div className="toolbar">
@@ -30,28 +32,36 @@ export default function Reports() {
         </div>
       </div>
 
+      <div className="card">
+        <h3 style={{ marginTop: 0, fontSize: 15 }}>تقرير الدعوم ({year})</h3>
+        <div className="toolbar">
+          <label>النوع:</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">كل الأنواع</option>
+            {Object.entries(SUPPORT_CATEGORY_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn secondary"
+            onClick={() =>
+              downloadReport(
+                `/reports/supports.xlsx?year=${year}${category ? `&category=${category}` : ""}`,
+                `تقرير_الدعوم_${year}.xlsx`
+              )
+            }
+          >
+            تحميل
+          </button>
+        </div>
+      </div>
+
       <div className="stat-grid">
         <div className="card">
           <h3 style={{ marginTop: 0, fontSize: 15 }}>تقرير المستفيدين</h3>
           <button className="btn secondary" onClick={() => downloadReport("/reports/beneficiaries.xlsx", "تقرير_المستفيدين.xlsx")}>
-            تحميل
-          </button>
-        </div>
-        <div className="card">
-          <h3 style={{ marginTop: 0, fontSize: 15 }}>تقرير الدعم النقدي ({year})</h3>
-          <button
-            className="btn secondary"
-            onClick={() => downloadReport(`/reports/cash-supports.xlsx?year=${year}`, `تقرير_الدعم_النقدي_${year}.xlsx`)}
-          >
-            تحميل
-          </button>
-        </div>
-        <div className="card">
-          <h3 style={{ marginTop: 0, fontSize: 15 }}>تقرير الدعم العيني ({year})</h3>
-          <button
-            className="btn secondary"
-            onClick={() => downloadReport(`/reports/in-kind-supports.xlsx?year=${year}`, `تقرير_الدعم_العيني_${year}.xlsx`)}
-          >
             تحميل
           </button>
         </div>

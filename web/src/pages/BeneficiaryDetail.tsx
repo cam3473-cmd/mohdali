@@ -1,39 +1,29 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
+import { SUPPORT_CATEGORY_LABEL, DISBURSEMENT_STATUS_LABEL } from "../lib/constants";
 
-const CASH_TYPE_LABEL: Record<string, string> = { MONTHLY: "شهري", EMERGENCY: "طارئ", SEASONAL: "موسمي", OTHER: "أخرى" };
-const IN_KIND_CATEGORY_LABEL: Record<string, string> = {
-  FOOD: "مواد غذائية",
-  CLOTHING: "ملابس",
-  FURNITURE: "أثاث",
-  DEVICES: "أجهزة",
-  MEDICAL: "مستلزمات طبية",
-  SCHOOL: "مستلزمات مدرسية",
-  OTHER: "أخرى",
-};
 const ENROLLMENT_STATUS_LABEL: Record<string, string> = { ENROLLED: "مسجل", COMPLETED: "أكمل", DROPPED: "منسحب" };
 
 export default function BeneficiaryDetail() {
   const { id } = useParams();
   const [data, setData] = useState<any>(null);
-  const [tab, setTab] = useState<"cash" | "inkind" | "courses">("cash");
+  const [tab, setTab] = useState<"supports" | "courses">("supports");
   const [loading, setLoading] = useState(true);
 
-  const [showCashForm, setShowCashForm] = useState(false);
-  const [showInKindForm, setShowInKindForm] = useState(false);
+  const [showSupportForm, setShowSupportForm] = useState(false);
   const [error, setError] = useState("");
 
   const currentYear = new Date().getFullYear();
 
-  const [cashForm, setCashForm] = useState({ amount: "", type: "MONTHLY", supportDate: "", year: String(currentYear), notes: "" });
-  const [inKindForm, setInKindForm] = useState({
-    category: "FOOD",
+  const [supportForm, setSupportForm] = useState({
+    category: "CASH",
+    amount: "",
     description: "",
-    quantity: "1",
-    estimatedValue: "",
+    quantity: "",
     supportDate: "",
     year: String(currentYear),
+    notes: "",
   });
 
   async function load() {
@@ -51,41 +41,22 @@ export default function BeneficiaryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function submitCash(e: FormEvent) {
+  async function submitSupport(e: FormEvent) {
     e.preventDefault();
     setError("");
     try {
-      await api.post("/cash-supports", {
+      await api.post("/supports", {
         beneficiaryId: id,
-        amount: Number(cashForm.amount),
-        type: cashForm.type,
-        supportDate: new Date(cashForm.supportDate).toISOString(),
-        year: Number(cashForm.year),
-        notes: cashForm.notes || null,
+        category: supportForm.category,
+        amount: supportForm.amount ? Number(supportForm.amount) : null,
+        description: supportForm.description || null,
+        quantity: supportForm.quantity ? Number(supportForm.quantity) : null,
+        supportDate: new Date(supportForm.supportDate).toISOString(),
+        year: Number(supportForm.year),
+        notes: supportForm.notes || null,
       });
-      setShowCashForm(false);
-      setCashForm({ amount: "", type: "MONTHLY", supportDate: "", year: String(currentYear), notes: "" });
-      load();
-    } catch (err) {
-      setError(apiErrorMessage(err));
-    }
-  }
-
-  async function submitInKind(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    try {
-      await api.post("/in-kind-supports", {
-        beneficiaryId: id,
-        category: inKindForm.category,
-        description: inKindForm.description,
-        quantity: Number(inKindForm.quantity),
-        estimatedValue: inKindForm.estimatedValue ? Number(inKindForm.estimatedValue) : null,
-        supportDate: new Date(inKindForm.supportDate).toISOString(),
-        year: Number(inKindForm.year),
-      });
-      setShowInKindForm(false);
-      setInKindForm({ category: "FOOD", description: "", quantity: "1", estimatedValue: "", supportDate: "", year: String(currentYear) });
+      setShowSupportForm(false);
+      setSupportForm({ category: "CASH", amount: "", description: "", quantity: "", supportDate: "", year: String(currentYear), notes: "" });
       load();
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -98,9 +69,14 @@ export default function BeneficiaryDetail() {
     <div>
       <div className="page-header">
         <h2>{data.fullName}</h2>
-        <Link to="/beneficiaries" className="btn secondary">
-          رجوع إلى القائمة
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to={`/beneficiaries/${id}/card`} className="btn secondary">
+            بطاقة المستفيد
+          </Link>
+          <Link to="/beneficiaries" className="btn secondary">
+            رجوع إلى القائمة
+          </Link>
+        </div>
       </div>
 
       <div className="card">
@@ -121,27 +97,24 @@ export default function BeneficiaryDetail() {
       </div>
 
       <div className="tabs">
-        <button className={tab === "cash" ? "active" : ""} onClick={() => setTab("cash")}>
-          الدعم النقدي ({data.cashSupports.length})
-        </button>
-        <button className={tab === "inkind" ? "active" : ""} onClick={() => setTab("inkind")}>
-          الدعم العيني ({data.inKindSupports.length})
+        <button className={tab === "supports" ? "active" : ""} onClick={() => setTab("supports")}>
+          الدعوم ({data.supports.length})
         </button>
         <button className={tab === "courses" ? "active" : ""} onClick={() => setTab("courses")}>
           الدورات التدريبية ({data.enrollments.length})
         </button>
       </div>
 
-      {tab === "cash" && (
+      {tab === "supports" && (
         <div className="card">
           <div className="page-header">
-            <h3 style={{ margin: 0, fontSize: 15 }}>سجل الدعم النقدي</h3>
-            <button className="btn small" onClick={() => setShowCashForm(true)}>
-              + إضافة دعم نقدي
+            <h3 style={{ margin: 0, fontSize: 15 }}>سجل الدعوم</h3>
+            <button className="btn small" onClick={() => setShowSupportForm(true)}>
+              + إضافة دعم
             </button>
           </div>
-          {data.cashSupports.length === 0 ? (
-            <p className="empty-state">لا توجد سجلات دعم نقدي</p>
+          {data.supports.length === 0 ? (
+            <p className="empty-state">لا توجد سجلات دعم</p>
           ) : (
             <table>
               <thead>
@@ -149,53 +122,18 @@ export default function BeneficiaryDetail() {
                   <th>التاريخ</th>
                   <th>النوع</th>
                   <th>المبلغ</th>
-                  <th>ملاحظات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.cashSupports.map((c: any) => (
-                  <tr key={c.id}>
-                    <td>{new Date(c.supportDate).toLocaleDateString("ar-SA")}</td>
-                    <td>{CASH_TYPE_LABEL[c.type]}</td>
-                    <td>{c.amount.toLocaleString("ar-SA")} ريال</td>
-                    <td>{c.notes || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {tab === "inkind" && (
-        <div className="card">
-          <div className="page-header">
-            <h3 style={{ margin: 0, fontSize: 15 }}>سجل الدعم العيني</h3>
-            <button className="btn small" onClick={() => setShowInKindForm(true)}>
-              + إضافة دعم عيني
-            </button>
-          </div>
-          {data.inKindSupports.length === 0 ? (
-            <p className="empty-state">لا توجد سجلات دعم عيني</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>التصنيف</th>
                   <th>الوصف</th>
-                  <th>الكمية</th>
-                  <th>القيمة التقديرية</th>
+                  <th>الحالة</th>
                 </tr>
               </thead>
               <tbody>
-                {data.inKindSupports.map((s: any) => (
+                {data.supports.map((s: any) => (
                   <tr key={s.id}>
                     <td>{new Date(s.supportDate).toLocaleDateString("ar-SA")}</td>
-                    <td>{IN_KIND_CATEGORY_LABEL[s.category]}</td>
-                    <td>{s.description}</td>
-                    <td>{s.quantity}</td>
-                    <td>{s.estimatedValue ? `${s.estimatedValue.toLocaleString("ar-SA")} ريال` : "-"}</td>
+                    <td>{SUPPORT_CATEGORY_LABEL[s.category] ?? s.category}</td>
+                    <td>{s.amount != null ? `${s.amount.toLocaleString("ar-SA")} ريال` : "-"}</td>
+                    <td>{s.description || "-"}</td>
+                    <td>{DISBURSEMENT_STATUS_LABEL[s.status] ?? s.status}</td>
                   </tr>
                 ))}
               </tbody>
@@ -232,91 +170,54 @@ export default function BeneficiaryDetail() {
         </div>
       )}
 
-      {showCashForm && (
-        <div className="modal-backdrop" onClick={() => setShowCashForm(false)}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitCash}>
-            <h3>إضافة دعم نقدي</h3>
+      {showSupportForm && (
+        <div className="modal-backdrop" onClick={() => setShowSupportForm(false)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitSupport}>
+            <h3>إضافة دعم</h3>
             {error && <div className="error-banner">{error}</div>}
             <div className="form-grid">
               <div className="field">
-                <label>المبلغ (ريال) *</label>
-                <input required type="number" value={cashForm.amount} onChange={(e) => setCashForm({ ...cashForm, amount: e.target.value })} />
+                <label>نوع الدعم</label>
+                <select value={supportForm.category} onChange={(e) => setSupportForm({ ...supportForm, category: e.target.value })}>
+                  {Object.entries(SUPPORT_CATEGORY_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="field">
-                <label>نوع الدعم</label>
-                <select value={cashForm.type} onChange={(e) => setCashForm({ ...cashForm, type: e.target.value })}>
-                  <option value="MONTHLY">شهري</option>
-                  <option value="EMERGENCY">طارئ</option>
-                  <option value="SEASONAL">موسمي</option>
-                  <option value="OTHER">أخرى</option>
-                </select>
+                <label>المبلغ (ريال)</label>
+                <input type="number" value={supportForm.amount} onChange={(e) => setSupportForm({ ...supportForm, amount: e.target.value })} />
               </div>
               <div className="field">
                 <label>تاريخ الصرف *</label>
-                <input required type="date" value={cashForm.supportDate} onChange={(e) => setCashForm({ ...cashForm, supportDate: e.target.value })} />
+                <input
+                  required
+                  type="date"
+                  value={supportForm.supportDate}
+                  onChange={(e) => setSupportForm({ ...supportForm, supportDate: e.target.value })}
+                />
               </div>
               <div className="field">
                 <label>السنة *</label>
-                <input required type="number" value={cashForm.year} onChange={(e) => setCashForm({ ...cashForm, year: e.target.value })} />
+                <input required type="number" value={supportForm.year} onChange={(e) => setSupportForm({ ...supportForm, year: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>الكمية (للدعم العيني)</label>
+                <input type="number" value={supportForm.quantity} onChange={(e) => setSupportForm({ ...supportForm, quantity: e.target.value })} />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>الوصف</label>
+                <input value={supportForm.description} onChange={(e) => setSupportForm({ ...supportForm, description: e.target.value })} />
               </div>
               <div className="field" style={{ gridColumn: "1 / -1" }}>
                 <label>ملاحظات</label>
-                <textarea rows={2} value={cashForm.notes} onChange={(e) => setCashForm({ ...cashForm, notes: e.target.value })} />
+                <textarea rows={2} value={supportForm.notes} onChange={(e) => setSupportForm({ ...supportForm, notes: e.target.value })} />
               </div>
             </div>
             <div className="modal-actions">
-              <button type="button" className="btn secondary" onClick={() => setShowCashForm(false)}>
-                إلغاء
-              </button>
-              <button type="submit" className="btn">
-                حفظ
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {showInKindForm && (
-        <div className="modal-backdrop" onClick={() => setShowInKindForm(false)}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitInKind}>
-            <h3>إضافة دعم عيني</h3>
-            {error && <div className="error-banner">{error}</div>}
-            <div className="form-grid">
-              <div className="field">
-                <label>التصنيف</label>
-                <select value={inKindForm.category} onChange={(e) => setInKindForm({ ...inKindForm, category: e.target.value })}>
-                  <option value="FOOD">مواد غذائية</option>
-                  <option value="CLOTHING">ملابس</option>
-                  <option value="FURNITURE">أثاث</option>
-                  <option value="DEVICES">أجهزة</option>
-                  <option value="MEDICAL">مستلزمات طبية</option>
-                  <option value="SCHOOL">مستلزمات مدرسية</option>
-                  <option value="OTHER">أخرى</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>الوصف *</label>
-                <input required value={inKindForm.description} onChange={(e) => setInKindForm({ ...inKindForm, description: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>الكمية</label>
-                <input type="number" value={inKindForm.quantity} onChange={(e) => setInKindForm({ ...inKindForm, quantity: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>القيمة التقديرية (ريال)</label>
-                <input type="number" value={inKindForm.estimatedValue} onChange={(e) => setInKindForm({ ...inKindForm, estimatedValue: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>تاريخ التسليم *</label>
-                <input required type="date" value={inKindForm.supportDate} onChange={(e) => setInKindForm({ ...inKindForm, supportDate: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>السنة *</label>
-                <input required type="number" value={inKindForm.year} onChange={(e) => setInKindForm({ ...inKindForm, year: e.target.value })} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="btn secondary" onClick={() => setShowInKindForm(false)}>
+              <button type="button" className="btn secondary" onClick={() => setShowSupportForm(false)}>
                 إلغاء
               </button>
               <button type="submit" className="btn">
