@@ -8,6 +8,10 @@ export default function Users() {
   const [form, setForm] = useState({ username: "", fullName: "", password: "" });
   const [error, setError] = useState("");
 
+  const [resetTarget, setResetTarget] = useState<{ id: string; fullName: string } | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [resetError, setResetError] = useState("");
+
   async function load() {
     setLoading(true);
     try {
@@ -40,15 +44,22 @@ export default function Users() {
     load();
   }
 
-  async function resetPassword(id: string) {
-    const password = prompt("أدخل كلمة المرور الجديدة (٦ أحرف على الأقل):");
-    if (!password) return;
-    if (password.length < 6) {
-      alert("كلمة المرور قصيرة جداً");
-      return;
+  function openResetPassword(u: { id: string; fullName: string }) {
+    setResetTarget(u);
+    setResetPasswordValue("");
+    setResetError("");
+  }
+
+  async function handleResetPassword(e: FormEvent) {
+    e.preventDefault();
+    if (!resetTarget) return;
+    setResetError("");
+    try {
+      await api.put(`/users/${resetTarget.id}`, { password: resetPasswordValue });
+      setResetTarget(null);
+    } catch (err) {
+      setResetError(apiErrorMessage(err));
     }
-    await api.put(`/users/${id}`, { password });
-    alert("تم تحديث كلمة المرور");
   }
 
   return (
@@ -85,7 +96,7 @@ export default function Users() {
                     <span className={`badge ${u.active ? "active" : "closed"}`}>{u.active ? "مفعل" : "معطل"}</span>
                   </td>
                   <td>
-                    <button className="btn secondary small" onClick={() => resetPassword(u.id)}>
+                    <button className="btn secondary small" onClick={() => openResetPassword(u)}>
                       تغيير كلمة المرور
                     </button>{" "}
                     <button className="btn secondary small" onClick={() => toggleActive(u.id, u.active)}>
@@ -120,6 +131,34 @@ export default function Users() {
             </div>
             <div className="modal-actions">
               <button type="button" className="btn secondary" onClick={() => setShowForm(false)}>
+                إلغاء
+              </button>
+              <button type="submit" className="btn">
+                حفظ
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {resetTarget && (
+        <div className="modal-backdrop" onClick={() => setResetTarget(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleResetPassword} style={{ maxWidth: 400 }}>
+            <h3>تغيير كلمة مرور: {resetTarget.fullName}</h3>
+            {resetError && <div className="error-banner">{resetError}</div>}
+            <div className="field">
+              <label>كلمة المرور الجديدة *</label>
+              <input
+                required
+                type="password"
+                minLength={6}
+                autoFocus
+                value={resetPasswordValue}
+                onChange={(e) => setResetPasswordValue(e.target.value)}
+              />
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setResetTarget(null)}>
                 إلغاء
               </button>
               <button type="submit" className="btn">
