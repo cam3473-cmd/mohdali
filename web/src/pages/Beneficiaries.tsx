@@ -1,18 +1,24 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
+import { CASE_TYPE_LABEL } from "../lib/constants";
 
 interface Beneficiary {
   id: string;
+  fileNumber?: string | null;
   nationalId: string;
   fullName: string;
   gender: "MALE" | "FEMALE";
+  birthDate?: string | null;
+  birthDateHijri?: string | null;
   maritalStatus?: string | null;
+  caseType?: string | null;
   familyMembersCount?: number | null;
   monthlyIncome?: number | null;
   neighborhood?: string | null;
   address?: string | null;
   phone?: string | null;
+  iban?: string | null;
   needCategory?: string | null;
   fileStatus: "ACTIVE" | "SUSPENDED" | "CLOSED";
   notes?: string | null;
@@ -22,15 +28,20 @@ const FILE_STATUS_LABEL: Record<string, string> = { ACTIVE: "نشط", SUSPENDED:
 const GENDER_LABEL: Record<string, string> = { MALE: "ذكر", FEMALE: "أنثى" };
 
 const emptyForm = {
+  fileNumber: "",
   nationalId: "",
   fullName: "",
   gender: "MALE",
+  birthDate: "",
+  birthDateHijri: "",
   maritalStatus: "",
+  caseType: "",
   familyMembersCount: "",
   monthlyIncome: "",
   neighborhood: "",
   address: "",
   phone: "",
+  iban: "",
   needCategory: "",
   fileStatus: "ACTIVE",
   notes: "",
@@ -80,15 +91,20 @@ export default function Beneficiaries() {
 
   function openEdit(b: Beneficiary) {
     setForm({
+      fileNumber: b.fileNumber ?? "",
       nationalId: b.nationalId,
       fullName: b.fullName,
       gender: b.gender,
+      birthDate: b.birthDate ? b.birthDate.slice(0, 10) : "",
+      birthDateHijri: b.birthDateHijri ?? "",
       maritalStatus: b.maritalStatus ?? "",
+      caseType: b.caseType ?? "",
       familyMembersCount: b.familyMembersCount?.toString() ?? "",
       monthlyIncome: b.monthlyIncome?.toString() ?? "",
       neighborhood: b.neighborhood ?? "",
       address: b.address ?? "",
       phone: b.phone ?? "",
+      iban: b.iban ?? "",
       needCategory: b.needCategory ?? "",
       fileStatus: b.fileStatus,
       notes: b.notes ?? "",
@@ -102,15 +118,20 @@ export default function Beneficiaries() {
     e.preventDefault();
     setError("");
     const payload = {
+      fileNumber: form.fileNumber || null,
       nationalId: form.nationalId,
       fullName: form.fullName,
       gender: form.gender,
+      birthDate: form.birthDate ? new Date(form.birthDate).toISOString() : null,
+      birthDateHijri: form.birthDateHijri || null,
       maritalStatus: form.maritalStatus || null,
+      caseType: form.caseType || null,
       familyMembersCount: form.familyMembersCount ? Number(form.familyMembersCount) : null,
       monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : null,
       neighborhood: form.neighborhood || null,
       address: form.address || null,
       phone: form.phone || null,
+      iban: form.iban || null,
       needCategory: form.needCategory || null,
       fileStatus: form.fileStatus,
       notes: form.notes || null,
@@ -181,7 +202,7 @@ export default function Beneficiaries() {
       {importError && <div className="error-banner">{importError}</div>}
 
       <div className="toolbar">
-        <input placeholder="بحث بالاسم أو رقم الهوية أو الجوال..." value={q} onChange={(e) => setQ(e.target.value)} />
+        <input placeholder="بحث بالاسم أو رقم الهوية أو الجوال أو رقم الملف..." value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">كل الحالات</option>
           <option value="ACTIVE">نشط</option>
@@ -199,9 +220,11 @@ export default function Beneficiaries() {
           <table>
             <thead>
               <tr>
+                <th>رقم الملف</th>
                 <th>الاسم</th>
                 <th>رقم الهوية</th>
                 <th>الجنس</th>
+                <th>نوع الملف</th>
                 <th>الحي</th>
                 <th>الجوال</th>
                 <th>الحالة</th>
@@ -211,11 +234,13 @@ export default function Beneficiaries() {
             <tbody>
               {items.map((b) => (
                 <tr key={b.id}>
+                  <td>{b.fileNumber || "-"}</td>
                   <td>
                     <Link to={`/beneficiaries/${b.id}`}>{b.fullName}</Link>
                   </td>
                   <td>{b.nationalId}</td>
                   <td>{GENDER_LABEL[b.gender]}</td>
+                  <td>{b.caseType ? CASE_TYPE_LABEL[b.caseType] : "-"}</td>
                   <td>{b.neighborhood || "-"}</td>
                   <td>{b.phone || "-"}</td>
                   <td>
@@ -243,6 +268,10 @@ export default function Beneficiaries() {
             {error && <div className="error-banner">{error}</div>}
             <div className="form-grid">
               <div className="field">
+                <label>رقم الملف</label>
+                <input value={form.fileNumber} onChange={(e) => setForm({ ...form, fileNumber: e.target.value })} />
+              </div>
+              <div className="field">
                 <label>رقم الهوية *</label>
                 <input
                   required
@@ -259,6 +288,22 @@ export default function Beneficiaries() {
                 <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
                   <option value="MALE">ذكر</option>
                   <option value="FEMALE">أنثى</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>تاريخ الميلاد</label>
+                <input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>تاريخ الميلاد الهجري</label>
+                <input value={form.birthDateHijri} onChange={(e) => setForm({ ...form, birthDateHijri: e.target.value })} placeholder="مثال: 1440/05/12" />
+              </div>
+              <div className="field">
+                <label>نوع الملف</label>
+                <select value={form.caseType} onChange={(e) => setForm({ ...form, caseType: e.target.value })}>
+                  <option value="">غير محدد</option>
+                  <option value="INDIVIDUAL">فرد</option>
+                  <option value="FAMILY">أسرة</option>
                 </select>
               </div>
               <div className="field">
@@ -294,6 +339,10 @@ export default function Beneficiaries() {
               <div className="field">
                 <label>رقم الجوال</label>
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>الآيبان</label>
+                <input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="SA..." />
               </div>
               <div className="field">
                 <label>تصنيف الاحتياج</label>

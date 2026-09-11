@@ -31,16 +31,20 @@ model User {
 // المستفيدون
 model Beneficiary {
   id                 String    @id @default(cuid())
+  fileNumber         String?   @unique // رقم الملف الداخلي (مرجع الجمعية)
   nationalId         String    @unique // رقم الهوية الوطنية
   fullName           String
   gender             String // MALE | FEMALE
   birthDate          DateTime?
+  birthDateHijri     String? // تاريخ الميلاد الهجري (نص، بدون تحويل تلقائي)
   maritalStatus      String? // SINGLE | MARRIED | DIVORCED | WIDOWED
+  caseType           String? // نوع الملف: INDIVIDUAL (فرد) | FAMILY (أسرة)
   familyMembersCount Int? // عدد أفراد الأسرة
   monthlyIncome      Float? // الدخل الشهري
   neighborhood       String? // الحي / الموقع
   address            String?
   phone              String?
+  iban               String? // رقم الآيبان البنكي (للتحويل النقدي)
   needCategory       String? // تصنيف الاحتياج (احتياج مادي، تأهيلي، ...)
   fileStatus         String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
   notes              String?

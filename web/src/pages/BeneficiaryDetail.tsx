@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
-import { SUPPORT_CATEGORY_LABEL, DISBURSEMENT_STATUS_LABEL } from "../lib/constants";
+import { SUPPORT_CATEGORY_LABEL, DISBURSEMENT_STATUS_LABEL, CASE_TYPE_LABEL } from "../lib/constants";
 
 const ENROLLMENT_STATUS_LABEL: Record<string, string> = { ENROLLED: "مسجل", COMPLETED: "أكمل", DROPPED: "منسحب" };
 
@@ -82,6 +82,9 @@ export default function BeneficiaryDetail() {
       <div className="card">
         <div className="form-grid">
           <div>
+            <strong>رقم الملف:</strong> {data.fileNumber || "-"}
+          </div>
+          <div>
             <strong>رقم الهوية:</strong> {data.nationalId}
           </div>
           <div>
@@ -89,6 +92,15 @@ export default function BeneficiaryDetail() {
           </div>
           <div>
             <strong>الحي:</strong> {data.neighborhood || "-"}
+          </div>
+          <div>
+            <strong>نوع الملف:</strong> {data.caseType ? CASE_TYPE_LABEL[data.caseType] : "-"}
+          </div>
+          <div>
+            <strong>عدد أفراد الأسرة:</strong> {data.familyMembersCount ?? "-"}
+          </div>
+          <div>
+            <strong>الآيبان:</strong> {data.iban || "-"}
           </div>
           <div>
             <strong>تصنيف الاحتياج:</strong> {data.needCategory || "-"}

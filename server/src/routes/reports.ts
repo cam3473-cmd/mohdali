@@ -14,6 +14,7 @@ const MARITAL_AR: Record<string, string> = {
   WIDOWED: "أرمل",
 };
 const FILE_STATUS_AR: Record<string, string> = { ACTIVE: "نشط", SUSPENDED: "موقوف", CLOSED: "مغلق" };
+const CASE_TYPE_AR: Record<string, string> = { INDIVIDUAL: "فرد", FAMILY: "أسرة" };
 const SUPPORT_CATEGORY_AR: Record<string, string> = {
   IN_KIND: "عيني",
   CASH: "نقدي",
@@ -105,27 +106,37 @@ reportsRouter.get("/beneficiaries.xlsx", async (req, res) => {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("المستفيدون");
   sheet.columns = [
+    { header: "رقم الملف", key: "fileNumber", width: 12 },
     { header: "رقم الهوية", key: "nationalId", width: 16 },
     { header: "الاسم", key: "fullName", width: 26 },
     { header: "الجنس", key: "gender", width: 10 },
+    { header: "تاريخ الميلاد", key: "birthDate", width: 14 },
+    { header: "تاريخ الميلاد الهجري", key: "birthDateHijri", width: 16 },
     { header: "الحالة الاجتماعية", key: "maritalStatus", width: 16 },
+    { header: "نوع الملف", key: "caseType", width: 12 },
     { header: "عدد أفراد الأسرة", key: "familyMembersCount", width: 14 },
     { header: "الدخل الشهري", key: "monthlyIncome", width: 14 },
     { header: "الحي", key: "neighborhood", width: 16 },
     { header: "الجوال", key: "phone", width: 14 },
+    { header: "الآيبان", key: "iban", width: 24 },
     { header: "تصنيف الاحتياج", key: "needCategory", width: 18 },
     { header: "حالة الملف", key: "fileStatus", width: 12 },
   ];
   items.forEach((b) => {
     sheet.addRow({
+      fileNumber: b.fileNumber ?? "",
       nationalId: b.nationalId,
       fullName: b.fullName,
       gender: GENDER_AR[b.gender] ?? b.gender,
+      birthDate: b.birthDate ? b.birthDate.toISOString().slice(0, 10) : "",
+      birthDateHijri: b.birthDateHijri ?? "",
       maritalStatus: b.maritalStatus ? MARITAL_AR[b.maritalStatus] : "",
+      caseType: b.caseType ? CASE_TYPE_AR[b.caseType] : "",
       familyMembersCount: b.familyMembersCount ?? "",
       monthlyIncome: b.monthlyIncome ?? "",
       neighborhood: b.neighborhood ?? "",
       phone: b.phone ?? "",
+      iban: b.iban ?? "",
       needCategory: b.needCategory ?? "",
       fileStatus: FILE_STATUS_AR[b.fileStatus] ?? b.fileStatus,
     });

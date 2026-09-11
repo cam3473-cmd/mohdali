@@ -14,3 +14,8 @@ export const DISBURSEMENT_STATUS_LABEL: Record<string, string> = {
   DISBURSED: "مصروف",
   CANCELLED: "ملغى",
 };
+
+export const CASE_TYPE_LABEL: Record<string, string> = {
+  INDIVIDUAL: "فرد",
+  FAMILY: "أسرة",
+};

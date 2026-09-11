@@ -61,6 +61,12 @@ export default function BeneficiaryCard() {
         <h2>جمعية البر الخيرية بمحافظة السليل</h2>
         <p className="subtitle">بطاقة مستفيد</p>
 
+        {data.fileNumber && (
+          <div className="row">
+            <span>رقم الملف</span>
+            <span>{data.fileNumber}</span>
+          </div>
+        )}
         <div className="row">
           <span>الاسم</span>
           <span>{data.fullName}</span>
