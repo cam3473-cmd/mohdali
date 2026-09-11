@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL } from "../lib/constants";
 
@@ -17,6 +17,7 @@ const emptyForm = {
 
 export default function Campaigns() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -43,12 +44,22 @@ export default function Campaigns() {
     setShowForm(true);
   }
 
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openAdd();
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
     try {
       const created = await api.post("/campaigns", {
-        title: form.title,
+        title: form.title || null,
         category: form.category,
         perPersonRate: form.perPersonRate ? Number(form.perPersonRate) : null,
         totalBudget: form.totalBudget ? Number(form.totalBudget) : null,
@@ -57,14 +68,15 @@ export default function Campaigns() {
         notes: form.notes || null,
       });
       setShowForm(false);
-      navigate(`/campaigns/${created.data.id}`);
+      const preselect = searchParams.get("beneficiaryId");
+      navigate(`/campaigns/${created.data.id}${preselect ? `?preselect=${preselect}` : ""}`);
     } catch (err) {
       setError(apiErrorMessage(err));
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("هل تريد حذف هذه الحملة؟ (سجلات الدعم المُنشأة منها تبقى محفوظة)")) return;
+    if (!confirm("هل تريد حذف هذه الدفعة؟ (سجلات الدعم المُنشأة منها تبقى محفوظة)")) return;
     await api.delete(`/campaigns/${id}`);
     load();
   }
@@ -72,26 +84,26 @@ export default function Campaigns() {
   return (
     <div>
       <div className="page-header">
-        <h2>حملات التوزيع العادل</h2>
+        <h2>دفعات الدعم</h2>
         <button className="btn" onClick={openAdd}>
-          + حملة جديدة
+          + دفعة دعم جديدة
         </button>
       </div>
       <p style={{ color: "var(--muted)", fontSize: 14, marginTop: -10 }}>
-        أداة اختيارية لتوزيع دعم على مجموعة مستفيدين دفعة واحدة، بالتناسب مع عدد أفراد كل أسرة — تُستخدم عند وصول دعم
-        يحتاج توزيعاً عادلاً (مثل دفعة موسمية). لإدخال دعم فردي عادي استخدم شاشة "الدعوم" مباشرة.
+        عند وصول دعم (نقدي أو عيني أو غيره)، أنشئ دفعة بنوعه وتاريخه، ثم اختر المستفيدين المشمولين — الجميع أو
+        بعضهم — وحدّد لكل واحد المبلغ (يمكن حسابه تلقائياً حسب عدد أفراد الأسرة، أو إدخاله يدوياً).
       </p>
 
       <div className="card">
         {loading ? (
           <p className="loading">جارٍ التحميل...</p>
         ) : items.length === 0 ? (
-          <p className="empty-state">لا توجد حملات بعد</p>
+          <p className="empty-state">لا توجد دفعات بعد</p>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>اسم الحملة</th>
+                <th>اسم الدفعة</th>
                 <th>النوع</th>
                 <th>نصيب الفرد</th>
                 <th>تاريخ التوزيع</th>
@@ -124,12 +136,12 @@ export default function Campaigns() {
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleSubmit}>
-            <h3>حملة توزيع جديدة</h3>
+            <h3>دفعة دعم جديدة</h3>
             {error && <div className="error-banner">{error}</div>}
             <div className="form-grid">
               <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>اسم الحملة *</label>
-                <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="مثال: توزيع دعم شتاء 1447" />
+                <label>اسم الدفعة (اختياري)</label>
+                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="مثال: توزيع دعم شتاء 1447 — يُترك فارغاً للتوليد التلقائي" />
               </div>
               <div className="field">
                 <label>نوع الدعم</label>

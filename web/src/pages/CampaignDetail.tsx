@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL } from "../lib/constants";
 
 export default function CampaignDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const preselectId = searchParams.get("preselect");
   const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -15,6 +17,7 @@ export default function CampaignDetail() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [sharedDescription, setSharedDescription] = useState("");
+  const [preselected, setPreselected] = useState(false);
 
   async function loadCampaign() {
     setLoading(true);
@@ -41,6 +44,28 @@ export default function CampaignDetail() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+
+  // عند القدوم من صفحة مستفيد محدد، حدّده تلقائياً مع إتاحة إضافة آخرين معه
+  useEffect(() => {
+    if (!campaign || !preselectId || preselected) return;
+    setPreselected(true);
+    api
+      .get(`/beneficiaries/${preselectId}`)
+      .then((res) => {
+        const b = res.data;
+        setBeneficiaries((prev) => (prev.some((x) => x.id === b.id) ? prev : [b, ...prev]));
+        setQ(b.fullName);
+        setSelected((prev) => new Set(prev).add(b.id));
+        setAmounts((a) => {
+          if (a[b.id]) return a;
+          const rate = campaign.perPersonRate ?? 0;
+          const members = b.familyMembersCount ?? 1;
+          return { ...a, [b.id]: String(Math.round(rate * members * 100) / 100) };
+        });
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign, preselectId]);
 
   function toggleSelect(b: any) {
     setSelected((prev) => {
@@ -113,7 +138,7 @@ export default function CampaignDetail() {
       <div className="page-header">
         <h2>{campaign.title}</h2>
         <Link to="/campaigns" className="btn secondary">
-          رجوع إلى الحملات
+          رجوع إلى دفعات الدعم
         </Link>
       </div>
 

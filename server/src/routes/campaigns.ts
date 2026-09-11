@@ -7,8 +7,18 @@ import { SUPPORT_CATEGORIES } from "./supports";
 export const campaignsRouter = Router();
 campaignsRouter.use(requireAuth);
 
+// تُستخدم لتوليد اسم افتراضي للدفعة عند عدم إدخال اسم مخصص
+const SUPPORT_CATEGORY_AR: Record<string, string> = {
+  IN_KIND: "عيني",
+  CASH: "نقدي",
+  HOUSING: "سكني",
+  ECONOMIC: "اقتصادي",
+  HEALTH: "صحي",
+  EDUCATIONAL: "تعليمي",
+};
+
 const campaignSchema = z.object({
-  title: z.string().min(1),
+  title: z.string().min(1).optional().nullable(),
   category: z.enum(SUPPORT_CATEGORIES),
   perPersonRate: z.number().nonnegative().optional().nullable(),
   totalBudget: z.number().nonnegative().optional().nullable(),
@@ -52,10 +62,13 @@ campaignsRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
   }
   const data = parsed.data;
+  const distributionDate = new Date(data.distributionDate);
+  const defaultTitle = `دعم ${SUPPORT_CATEGORY_AR[data.category] ?? data.category} - ${distributionDate.toLocaleDateString("ar-SA")}`;
   const created = await prisma.supportCampaign.create({
     data: {
       ...data,
-      distributionDate: new Date(data.distributionDate),
+      title: data.title?.trim() || defaultTitle,
+      distributionDate,
       createdById: req.user!.userId,
     },
   });

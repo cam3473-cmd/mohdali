@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, apiErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL, DISBURSEMENT_STATUS_LABEL, CASE_TYPE_LABEL } from "../lib/constants";
 
 const ENROLLMENT_STATUS_LABEL: Record<string, string> = { ENROLLED: "مسجل", COMPLETED: "أكمل", DROPPED: "منسحب" };
@@ -10,21 +10,6 @@ export default function BeneficiaryDetail() {
   const [data, setData] = useState<any>(null);
   const [tab, setTab] = useState<"supports" | "courses">("supports");
   const [loading, setLoading] = useState(true);
-
-  const [showSupportForm, setShowSupportForm] = useState(false);
-  const [error, setError] = useState("");
-
-  const currentYear = new Date().getFullYear();
-
-  const [supportForm, setSupportForm] = useState({
-    category: "CASH",
-    amount: "",
-    description: "",
-    quantity: "",
-    supportDate: "",
-    year: String(currentYear),
-    notes: "",
-  });
 
   async function load() {
     setLoading(true);
@@ -40,28 +25,6 @@ export default function BeneficiaryDetail() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  async function submitSupport(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    try {
-      await api.post("/supports", {
-        beneficiaryId: id,
-        category: supportForm.category,
-        amount: supportForm.amount ? Number(supportForm.amount) : null,
-        description: supportForm.description || null,
-        quantity: supportForm.quantity ? Number(supportForm.quantity) : null,
-        supportDate: new Date(supportForm.supportDate).toISOString(),
-        year: Number(supportForm.year),
-        notes: supportForm.notes || null,
-      });
-      setShowSupportForm(false);
-      setSupportForm({ category: "CASH", amount: "", description: "", quantity: "", supportDate: "", year: String(currentYear), notes: "" });
-      load();
-    } catch (err) {
-      setError(apiErrorMessage(err));
-    }
-  }
 
   if (loading || !data) return <p className="loading">جارٍ التحميل...</p>;
 
@@ -121,9 +84,9 @@ export default function BeneficiaryDetail() {
         <div className="card">
           <div className="page-header">
             <h3 style={{ margin: 0, fontSize: 15 }}>سجل الدعوم</h3>
-            <button className="btn small" onClick={() => setShowSupportForm(true)}>
+            <Link to={`/campaigns?new=1&beneficiaryId=${id}`} className="btn small">
               + إضافة دعم
-            </button>
+            </Link>
           </div>
           {data.supports.length === 0 ? (
             <p className="empty-state">لا توجد سجلات دعم</p>
@@ -179,64 +142,6 @@ export default function BeneficiaryDetail() {
               </tbody>
             </table>
           )}
-        </div>
-      )}
-
-      {showSupportForm && (
-        <div className="modal-backdrop" onClick={() => setShowSupportForm(false)}>
-          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submitSupport}>
-            <h3>إضافة دعم</h3>
-            {error && <div className="error-banner">{error}</div>}
-            <div className="form-grid">
-              <div className="field">
-                <label>نوع الدعم</label>
-                <select value={supportForm.category} onChange={(e) => setSupportForm({ ...supportForm, category: e.target.value })}>
-                  {Object.entries(SUPPORT_CATEGORY_LABEL).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>المبلغ (ريال)</label>
-                <input type="number" value={supportForm.amount} onChange={(e) => setSupportForm({ ...supportForm, amount: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>تاريخ الصرف *</label>
-                <input
-                  required
-                  type="date"
-                  value={supportForm.supportDate}
-                  onChange={(e) => setSupportForm({ ...supportForm, supportDate: e.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label>السنة *</label>
-                <input required type="number" value={supportForm.year} onChange={(e) => setSupportForm({ ...supportForm, year: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>الكمية (للدعم العيني)</label>
-                <input type="number" value={supportForm.quantity} onChange={(e) => setSupportForm({ ...supportForm, quantity: e.target.value })} />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>الوصف</label>
-                <input value={supportForm.description} onChange={(e) => setSupportForm({ ...supportForm, description: e.target.value })} />
-              </div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}>
-                <label>ملاحظات</label>
-                <textarea rows={2} value={supportForm.notes} onChange={(e) => setSupportForm({ ...supportForm, notes: e.target.value })} />
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="btn secondary" onClick={() => setShowSupportForm(false)}>
-                إلغاء
-              </button>
-              <button type="submit" className="btn">
-                حفظ
-              </button>
-            </div>
-          </form>
         </div>
       )}
     </div>
