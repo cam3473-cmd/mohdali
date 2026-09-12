@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { fork, spawn } = require("child_process");
@@ -124,12 +124,23 @@ async function createWindow() {
   }
   await startServer(databaseUrl);
 
+  // تُحسب مقاسات النافذة من مساحة الشاشة المتاحة فعلياً (تختلف بين الأجهزة)
+  // بدلاً من مقاس ثابت، حتى تظهر النافذة كاملة ومناسبة لأي شاشة دون تمرير أو قص
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const windowWidth = Math.min(1320, screenWidth);
+  const windowHeight = Math.min(840, screenHeight);
+
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 840,
+    width: windowWidth,
+    height: windowHeight,
+    x: Math.round((screenWidth - windowWidth) / 2),
+    y: Math.round((screenHeight - windowHeight) / 2),
     title: "نظام إدارة المستفيدين - جمعية البر الخيرية بمحافظة السليل",
     autoHideMenuBar: true,
   });
+  if (screenWidth <= 1320 || screenHeight <= 840) {
+    mainWindow.maximize();
+  }
   mainWindow.loadURL(`http://localhost:${PORT}`);
 }
 

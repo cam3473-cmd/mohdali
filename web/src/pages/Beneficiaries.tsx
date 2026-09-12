@@ -69,7 +69,7 @@ export default function Beneficiaries() {
   async function load() {
     setLoading(true);
     try {
-      const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: status || undefined } });
+      const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: status || undefined, pageSize: 5000 } });
       setItems(res.data.items);
     } finally {
       setLoading(false);

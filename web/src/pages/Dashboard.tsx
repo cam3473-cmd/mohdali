@@ -9,6 +9,13 @@ interface CategoryBreakdown {
   count: number;
 }
 
+// روابط أنظمة خارجية تُستخدم من الجمعية، تُفتح في نافذة/تبويب جديد
+const EXTERNAL_LINKS = [
+  { label: "نظام غيث", url: "https://new.ghaith.io/ar" },
+  { label: "نظام رسائل المستفيدين", url: "https://portal.oursms.com/dashboard" },
+  { label: "نظام الامتياز المحاسبي", url: "https://char2.emt-cloud.com/FIN/ACCSTM?f=1" },
+];
+
 interface Summary {
   year: number;
   beneficiariesCount: number;
@@ -36,6 +43,16 @@ export default function Dashboard() {
       <div className="page-header">
         <h2>لوحة التحكم</h2>
       </div>
+
+      <div className="toolbar" style={{ flexWrap: "wrap" }}>
+        <span style={{ color: "var(--muted)", fontSize: 13 }}>أنظمة خارجية:</span>
+        {EXTERNAL_LINKS.map((link) => (
+          <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="btn secondary small">
+            {link.label}
+          </a>
+        ))}
+      </div>
+
       {loading && <p className="loading">جارٍ التحميل...</p>}
       {summary && (
         <>

@@ -30,7 +30,7 @@ export default function CampaignDetail() {
   }
 
   async function loadBeneficiaries() {
-    const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: "ACTIVE", pageSize: 200 } });
+    const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: "ACTIVE", pageSize: 5000 } });
     setBeneficiaries(res.data.items);
   }
 

@@ -253,7 +253,7 @@ beneficiariesRouter.post("/import", upload.single("file"), async (req, res) => {
 // قائمة المستفيدين مع بحث وتصفية
 beneficiariesRouter.get("/", async (req, res) => {
   const { q, status, page = "1", pageSize = "50" } = req.query as Record<string, string>;
-  const take = Math.min(parseInt(pageSize, 10) || 50, 200);
+  const take = Math.min(parseInt(pageSize, 10) || 50, 5000);
   const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
 
   const where: any = {};
