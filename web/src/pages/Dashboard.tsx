@@ -9,12 +9,21 @@ interface CategoryBreakdown {
   count: number;
 }
 
-// روابط أنظمة خارجية تُستخدم من الجمعية، تُفتح في نافذة/تبويب جديد
+// روابط أنظمة خارجية تُستخدم من الجمعية
 const EXTERNAL_LINKS = [
   { label: "نظام غيث", url: "https://new.ghaith.io/ar" },
   { label: "نظام رسائل المستفيدين", url: "https://portal.oursms.com/dashboard" },
   { label: "نظام الامتياز المحاسبي", url: "https://char2.emt-cloud.com/FIN/ACCSTM?f=1" },
 ];
+
+// تُفتح كنافذة منبثقة مصغّرة بدون شريط عنوان/تبويبات المتصفح، بدل تبويب كامل جديد
+function openExternal(url: string) {
+  window.open(
+    url,
+    "_blank",
+    "width=1200,height=840,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+  );
+}
 
 interface Summary {
   year: number;
@@ -47,9 +56,9 @@ export default function Dashboard() {
       <div className="toolbar" style={{ flexWrap: "wrap" }}>
         <span style={{ color: "var(--muted)", fontSize: 13 }}>أنظمة خارجية:</span>
         {EXTERNAL_LINKS.map((link) => (
-          <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="btn secondary small">
+          <button key={link.url} type="button" className="btn secondary small" onClick={() => openExternal(link.url)}>
             {link.label}
-          </a>
+          </button>
         ))}
       </div>
 

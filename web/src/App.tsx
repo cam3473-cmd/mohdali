@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Beneficiaries from "./pages/Beneficiaries";
 import BeneficiaryDetail from "./pages/BeneficiaryDetail";
 import BeneficiaryCard from "./pages/BeneficiaryCard";
+import BeneficiaryCardsAll from "./pages/BeneficiaryCardsAll";
 import Supports from "./pages/Supports";
 import Campaigns from "./pages/Campaigns";
 import CampaignDetail from "./pages/CampaignDetail";
@@ -29,6 +30,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <BeneficiaryCard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/beneficiaries/cards"
+        element={
+          <RequireAuth>
+            <BeneficiaryCardsAll />
           </RequireAuth>
         }
       />

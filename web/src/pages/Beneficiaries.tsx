@@ -190,6 +190,9 @@ export default function Beneficiaries() {
         <h2>المستفيدون</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <input ref={fileInputRef} type="file" accept=".xlsx" hidden onChange={handleFileSelected} />
+          <Link to="/beneficiaries/cards" className="btn secondary">
+            طباعة بطاقات الجميع
+          </Link>
           <button className="btn secondary" onClick={openImportPicker} disabled={importing}>
             {importing ? "جارٍ الاستيراد..." : "استيراد من إكسل"}
           </button>
