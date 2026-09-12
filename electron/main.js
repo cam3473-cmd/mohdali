@@ -114,6 +114,21 @@ function startServer(databaseUrl) {
   });
 }
 
+// تُحسب مقاسات أي نافذة من مساحة الشاشة المتاحة فعلياً (تختلف بين الأجهزة)
+// بدلاً من مقاس ثابت، حتى تظهر النافذة كاملة ومناسبة لأي شاشة دون تمرير أو قص
+function fitToScreen(maxWidth, maxHeight) {
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const width = Math.min(maxWidth, screenWidth);
+  const height = Math.min(maxHeight, screenHeight);
+  return {
+    width,
+    height,
+    x: Math.round((screenWidth - width) / 2),
+    y: Math.round((screenHeight - height) / 2),
+    shouldMaximize: screenWidth <= maxWidth || screenHeight <= maxHeight,
+  };
+}
+
 async function createWindow() {
   const dbFilePath = getDatabasePath();
   const databaseUrl = `file:${dbFilePath}`;
@@ -124,23 +139,37 @@ async function createWindow() {
   }
   await startServer(databaseUrl);
 
-  // تُحسب مقاسات النافذة من مساحة الشاشة المتاحة فعلياً (تختلف بين الأجهزة)
-  // بدلاً من مقاس ثابت، حتى تظهر النافذة كاملة ومناسبة لأي شاشة دون تمرير أو قص
-  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
-  const windowWidth = Math.min(1320, screenWidth);
-  const windowHeight = Math.min(840, screenHeight);
+  const fitted = fitToScreen(1320, 840);
 
   mainWindow = new BrowserWindow({
-    width: windowWidth,
-    height: windowHeight,
-    x: Math.round((screenWidth - windowWidth) / 2),
-    y: Math.round((screenHeight - windowHeight) / 2),
+    width: fitted.width,
+    height: fitted.height,
+    x: fitted.x,
+    y: fitted.y,
     title: "نظام إدارة المستفيدين - جمعية البر الخيرية بمحافظة السليل",
     autoHideMenuBar: true,
   });
-  if (screenWidth <= 1320 || screenHeight <= 840) {
+  if (fitted.shouldMaximize) {
     mainWindow.maximize();
   }
+
+  // الروابط الخارجية (الأنظمة الأخرى المفتوحة من لوحة التحكم) تُفتح في نافذة Electron
+  // مستقلة بدل الاعتماد على مقاسات window.open الافتراضية، حتى تُحسب مقاساتها من
+  // الشاشة الفعلية مثل النافذة الرئيسية تماماً، وبدون شريط القوائم العلوي (File/Edit/...)
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    const popupFit = fitToScreen(1200, 840);
+    return {
+      action: "allow",
+      overrideBrowserWindowOptions: {
+        width: popupFit.width,
+        height: popupFit.height,
+        x: popupFit.x,
+        y: popupFit.y,
+        autoHideMenuBar: true,
+      },
+    };
+  });
+
   mainWindow.loadURL(`http://localhost:${PORT}`);
 }
 
