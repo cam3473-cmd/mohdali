@@ -76,7 +76,7 @@ export default function BeneficiaryDetail() {
           الدعوم ({data.supports.length})
         </button>
         <button className={tab === "courses" ? "active" : ""} onClick={() => setTab("courses")}>
-          الدورات التدريبية ({data.enrollments.length})
+          الدورات التدريبية ({data.participants.length})
         </button>
       </div>
 
@@ -84,7 +84,7 @@ export default function BeneficiaryDetail() {
         <div className="card">
           <div className="page-header">
             <h3 style={{ margin: 0, fontSize: 15 }}>سجل الدعوم</h3>
-            <Link to={`/campaigns?new=1&beneficiaryId=${id}`} className="btn small">
+            <Link to={`/batches?new=1&beneficiaryId=${id}`} className="btn small">
               + إضافة دعم
             </Link>
           </div>
@@ -99,6 +99,7 @@ export default function BeneficiaryDetail() {
                   <th>المبلغ</th>
                   <th>الوصف</th>
                   <th>الحالة</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -109,6 +110,11 @@ export default function BeneficiaryDetail() {
                     <td>{s.amount != null ? `${s.amount.toLocaleString("ar-SA")} ريال` : "-"}</td>
                     <td>{s.description || "-"}</td>
                     <td>{DISBURSEMENT_STATUS_LABEL[s.status] ?? s.status}</td>
+                    <td>
+                      <Link to={`/supports/${s.id}/voucher`} className="btn secondary small">
+                        سند صرف
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -120,7 +126,7 @@ export default function BeneficiaryDetail() {
       {tab === "courses" && (
         <div className="card">
           <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>الدورات المسجل بها</h3>
-          {data.enrollments.length === 0 ? (
+          {data.participants.length === 0 ? (
             <p className="empty-state">لا توجد تسجيلات في دورات</p>
           ) : (
             <table>
@@ -132,7 +138,7 @@ export default function BeneficiaryDetail() {
                 </tr>
               </thead>
               <tbody>
-                {data.enrollments.map((e: any) => (
+                {data.participants.map((e: any) => (
                   <tr key={e.id}>
                     <td>{e.course.title}</td>
                     <td>{ENROLLMENT_STATUS_LABEL[e.status]}</td>

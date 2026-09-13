@@ -21,11 +21,11 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
-  createdBeneficiaries Beneficiary[]      @relation("BeneficiaryCreatedBy")
-  supports             Support[]          @relation("SupportCreatedBy")
-  campaigns            SupportCampaign[]  @relation("CampaignCreatedBy")
-  courses              Course[]           @relation("CourseCreatedBy")
-  enrollments          CourseEnrollment[] @relation("EnrollmentCreatedBy")
+  createdBeneficiaries Beneficiary[]       @relation("BeneficiaryCreatedBy")
+  supports             Support[]           @relation("SupportCreatedBy")
+  batches              SupportBatch[]      @relation("BatchCreatedBy")
+  courses              Course[]            @relation("CourseCreatedBy")
+  participants         CourseParticipant[] @relation("ParticipantCreatedBy")
 }
 
 // المستفيدون
@@ -53,50 +53,56 @@ model Beneficiary {
   createdById        String?
   createdBy          User?     @relation("BeneficiaryCreatedBy", fields: [createdById], references: [id])
 
-  supports    Support[]
-  enrollments CourseEnrollment[]
+  supports     Support[]
+  participants CourseParticipant[]
 
   @@index([fullName])
   @@index([fileStatus])
 }
 
-// الدعم (نموذج موحّد لجميع أنواع الدعم)
+// الدعم (نموذج موحّد لجميع أنواع الدعم) — كل سجل هو عملية صرف فعلية لمستفيد واحد من دفعة وارد
 model Support {
-  id            String           @id @default(cuid())
+  id            String        @id @default(cuid())
   beneficiaryId String
-  beneficiary   Beneficiary      @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
-  category      String // IN_KIND | CASH | HOUSING | ECONOMIC | HEALTH | EDUCATIONAL
+  beneficiary   Beneficiary   @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  category      String // IN_KIND | CASH | HOUSING | ECONOMIC | HEALTH | EDUCATIONAL | SERVICES
   amount        Float? // القيمة النقدية أو التقديرية (إن وُجدت)
   description   String? // وصف الصنف (للدعم العيني بشكل أساسي)
   quantity      Int? // الكمية (للدعم العيني)
   supportDate   DateTime
   year          Int // السنة المالية للدعم
-  status        String           @default("DISBURSED") // PENDING | DISBURSED | CANCELLED
+  status        String        @default("DISBURSED") // PENDING | DISBURSED | CANCELLED
   notes         String?
-  campaignId    String?
-  campaign      SupportCampaign? @relation(fields: [campaignId], references: [id])
-  createdAt     DateTime         @default(now())
+  batchId       String?
+  batch         SupportBatch? @relation(fields: [batchId], references: [id])
+  createdAt     DateTime      @default(now())
   createdById   String?
-  createdBy     User?            @relation("SupportCreatedBy", fields: [createdById], references: [id])
+  createdBy     User?         @relation("SupportCreatedBy", fields: [createdById], references: [id])
 
   @@index([beneficiaryId])
   @@index([year])
   @@index([category])
 }
 
-// حملة/دفعة توزيع دعم عادل حسب عدد أفراد الأسرة (أداة اختيارية)
-model SupportCampaign {
-  id               String   @id @default(cuid())
-  title            String // اسم الحملة (مثال: توزيع دعم شتاء 1447)
-  category         String // نفس تصنيفات الدعم أعلاه
-  perPersonRate    Float? // نصيب الفرد الواحد من الأسرة (الصيغة الافتراضية للتوزيع)
-  totalBudget      Float? // إجمالي ميزانية الحملة (اختياري، للعرض فقط)
-  distributionDate DateTime
-  year             Int
-  notes            String?
-  createdAt        DateTime @default(now())
-  createdById      String?
-  createdBy        User?    @relation("CampaignCreatedBy", fields: [createdById], references: [id])
+// دفعة دعم واردة (نموذج المستودع: استلام أولاً، ثم توزيع لاحق من نفس الرصيد على جلسة أو أكثر)
+model SupportBatch {
+  id                 String   @id @default(cuid())
+  title              String // اسم الدفعة (يُولَّد تلقائياً من النوع والتاريخ إن لم يُدخَل)
+  category           String // نفس تصنيفات الدعم أعلاه
+  totalAmount        Float // إجمالي القيمة الواردة = مبلغ مباشر أو (quantity × unitPrice) للعيني
+  quantity           Int? // عدد الوحدات الواردة (للعيني، اختياري للتوثيق)
+  unitPrice          Float? // سعر الوحدة (للعيني، اختياري للتوثيق)
+  receivedDate       DateTime
+  year               Int
+  status             String   @default("OPEN") // OPEN | CLOSED (إغلاق يدوي فقط)
+  distributionMethod String   @default("HEAD_PLUS_DEPENDENTS") // UNIFIED | HEAD_PLUS_DEPENDENTS
+  unifiedAmount      Float? // المبلغ/القيمة الموحّدة لكامل الأسرة (طريقة UNIFIED)
+  headAmount         Float? // مبلغ رب الأسرة (طريقة HEAD_PLUS_DEPENDENTS)
+  dependentAmount    Float? // مبلغ كل تابع (طريقة HEAD_PLUS_DEPENDENTS)
+  notes              String?
+  createdAt          DateTime @default(now())
+  createdById        String?
+  createdBy          User?    @relation("BatchCreatedBy", fields: [createdById], references: [id])
 
   supports Support[]
 }
@@ -111,29 +117,37 @@ model Course {
   endDate     DateTime?
   seatsCount  Int?
   location    String?
+  totalCost   Float? // التكلفة الإجمالية للدورة، تُضاف كرقم واحد لإجمالي الدعوم العام
   notes       String?
   createdAt   DateTime  @default(now())
   createdById String?
   createdBy   User?     @relation("CourseCreatedBy", fields: [createdById], references: [id])
 
-  enrollments CourseEnrollment[]
+  participants CourseParticipant[]
 
   @@index([category])
 }
 
-// تسجيل المستفيدين في الدورات
-model CourseEnrollment {
-  id                String      @id @default(cuid())
-  beneficiaryId     String
-  beneficiary       Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+// مشاركو الدورات التدريبية — بيان مستقل تماماً عن جدول المستفيدين (قد يكونوا أبناءهم أو غيرهم)،
+// مع إمكانية ربط اختياري بمستفيد مسجَّل لأغراض الإحالة فقط
+model CourseParticipant {
+  id                String       @id @default(cuid())
   courseId          String
-  course            Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  status            String      @default("ENROLLED") // ENROLLED | COMPLETED | DROPPED
-  certificateIssued Boolean     @default(false)
+  course            Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  fullName          String
+  civilId           String? // رقم السجل المدني / الهوية
+  phone             String?
+  birthDate         DateTime?
+  birthDateHijri    String?
+  email             String?
+  beneficiaryId     String? // ربط اختياري بمستفيد مسجَّل (للإحالة فقط، ليس شرطاً)
+  beneficiary       Beneficiary? @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
+  status            String       @default("ENROLLED") // ENROLLED | COMPLETED | DROPPED
+  certificateIssued Boolean      @default(false)
   notes             String?
-  createdAt         DateTime    @default(now())
+  createdAt         DateTime     @default(now())
   createdById       String?
-  createdBy         User?       @relation("EnrollmentCreatedBy", fields: [createdById], references: [id])
+  createdBy         User?        @relation("ParticipantCreatedBy", fields: [createdById], references: [id])
 
-  @@unique([beneficiaryId, courseId])
+  @@index([courseId])
 }

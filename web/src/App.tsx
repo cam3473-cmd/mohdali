@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { useDraggableModals } from "./lib/useDraggableModals";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -8,8 +9,10 @@ import BeneficiaryDetail from "./pages/BeneficiaryDetail";
 import BeneficiaryCard from "./pages/BeneficiaryCard";
 import BeneficiaryCardsAll from "./pages/BeneficiaryCardsAll";
 import Supports from "./pages/Supports";
-import Campaigns from "./pages/Campaigns";
-import CampaignDetail from "./pages/CampaignDetail";
+import SupportVoucher from "./pages/SupportVoucher";
+import Batches from "./pages/Batches";
+import BatchDetail from "./pages/BatchDetail";
+import BatchReceiptVoucher from "./pages/BatchReceiptVoucher";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Reports from "./pages/Reports";
@@ -42,6 +45,22 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/supports/:id/voucher"
+        element={
+          <RequireAuth>
+            <SupportVoucher />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/batches/:id/receipt"
+        element={
+          <RequireAuth>
+            <BatchReceiptVoucher />
+          </RequireAuth>
+        }
+      />
+      <Route
         element={
           <RequireAuth>
             <Layout />
@@ -52,8 +71,8 @@ function AppRoutes() {
         <Route path="/beneficiaries" element={<Beneficiaries />} />
         <Route path="/beneficiaries/:id" element={<BeneficiaryDetail />} />
         <Route path="/supports" element={<Supports />} />
-        <Route path="/campaigns" element={<Campaigns />} />
-        <Route path="/campaigns/:id" element={<CampaignDetail />} />
+        <Route path="/batches" element={<Batches />} />
+        <Route path="/batches/:id" element={<BatchDetail />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
         <Route path="/reports" element={<Reports />} />
@@ -65,6 +84,7 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useDraggableModals();
   return (
     <AuthProvider>
       <AppRoutes />

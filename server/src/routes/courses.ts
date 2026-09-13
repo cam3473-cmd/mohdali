@@ -14,11 +14,20 @@ const courseSchema = z.object({
   endDate: z.string().datetime().optional().nullable(),
   seatsCount: z.number().int().positive().optional().nullable(),
   location: z.string().optional().nullable(),
+  totalCost: z.number().nonnegative().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
-const enrollmentSchema = z.object({
-  beneficiaryId: z.string().min(1),
+// مشارك الدورة: سجلّ مستقل تماماً عن جدول المستفيدين (بيانات مباشرة)،
+// مع ربط اختياري ببنفيديري مسجَّل لأغراض الإحالة فقط
+const participantSchema = z.object({
+  fullName: z.string().min(1),
+  civilId: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  birthDate: z.string().datetime().optional().nullable(),
+  birthDateHijri: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  beneficiaryId: z.string().optional().nullable(),
   status: z.enum(["ENROLLED", "COMPLETED", "DROPPED"]).optional(),
   certificateIssued: z.boolean().optional(),
   notes: z.string().optional().nullable(),
@@ -31,7 +40,7 @@ coursesRouter.get("/", async (req, res) => {
 
   const items = await prisma.course.findMany({
     where,
-    include: { _count: { select: { enrollments: true } } },
+    include: { _count: { select: { participants: true } } },
     orderBy: { startDate: "desc" },
   });
   res.json(items);
@@ -40,7 +49,7 @@ coursesRouter.get("/", async (req, res) => {
 coursesRouter.get("/:id", async (req, res) => {
   const item = await prisma.course.findUnique({
     where: { id: req.params.id },
-    include: { enrollments: { include: { beneficiary: true } } },
+    include: { participants: { include: { beneficiary: true }, orderBy: { createdAt: "desc" } } },
   });
   if (!item) return res.status(404).json({ error: "الدورة غير موجودة" });
   res.json(item);
@@ -93,50 +102,44 @@ coursesRouter.delete("/:id", async (req, res) => {
   }
 });
 
-// تسجيل مستفيد في دورة
-coursesRouter.post("/:id/enrollments", async (req, res) => {
-  const parsed = enrollmentSchema.safeParse(req.body);
+// إضافة مشارك مباشرة (لا يتطلب وجوده في جدول المستفيدين)
+coursesRouter.post("/:id/participants", async (req, res) => {
+  const parsed = participantSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
   }
   const data = parsed.data;
-
-  const existing = await prisma.courseEnrollment.findUnique({
-    where: { beneficiaryId_courseId: { beneficiaryId: data.beneficiaryId, courseId: req.params.id } },
-  });
-  if (existing) {
-    return res.status(409).json({ error: "المستفيد مسجل مسبقاً في هذه الدورة" });
-  }
-
   try {
-    const created = await prisma.courseEnrollment.create({
+    const created = await prisma.courseParticipant.create({
       data: {
         ...data,
+        birthDate: data.birthDate ? new Date(data.birthDate) : null,
         courseId: req.params.id,
         createdById: req.user!.userId,
       },
     });
     res.status(201).json(created);
   } catch (err: any) {
-    if (err?.code === "P2002") {
-      return res.status(409).json({ error: "المستفيد مسجل مسبقاً في هذه الدورة" });
-    }
     if (err?.code === "P2003") {
-      return res.status(400).json({ error: "الدورة أو المستفيد غير موجود" });
+      return res.status(400).json({ error: "الدورة أو المستفيد المرتبط غير موجود" });
     }
-    res.status(400).json({ error: "تعذر تسجيل المستفيد في الدورة" });
+    res.status(400).json({ error: "تعذر إضافة المشارك" });
   }
 });
 
-coursesRouter.put("/enrollments/:enrollmentId", async (req, res) => {
-  const parsed = enrollmentSchema.partial().safeParse(req.body);
+coursesRouter.put("/participants/:participantId", async (req, res) => {
+  const parsed = participantSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
   }
+  const data = parsed.data;
   try {
-    const updated = await prisma.courseEnrollment.update({
-      where: { id: req.params.enrollmentId },
-      data: parsed.data,
+    const updated = await prisma.courseParticipant.update({
+      where: { id: req.params.participantId },
+      data: {
+        ...data,
+        birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
+      },
     });
     res.json(updated);
   } catch {
@@ -144,9 +147,9 @@ coursesRouter.put("/enrollments/:enrollmentId", async (req, res) => {
   }
 });
 
-coursesRouter.delete("/enrollments/:enrollmentId", async (req, res) => {
+coursesRouter.delete("/participants/:participantId", async (req, res) => {
   try {
-    await prisma.courseEnrollment.delete({ where: { id: req.params.enrollmentId } });
+    await prisma.courseParticipant.delete({ where: { id: req.params.participantId } });
     res.status(204).end();
   } catch {
     res.status(404).json({ error: "السجل غير موجود" });

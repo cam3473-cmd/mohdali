@@ -6,7 +6,7 @@ const links = [
   { to: "/", label: "لوحة التحكم", end: true },
   { to: "/beneficiaries", label: "المستفيدون" },
   { to: "/supports", label: "الدعوم" },
-  { to: "/campaigns", label: "دفعات الدعم" },
+  { to: "/batches", label: "دفعات الدعم" },
   { to: "/courses", label: "الدورات التدريبية" },
   { to: "/reports", label: "التقارير" },
   { to: "/users", label: "المستخدمون" },

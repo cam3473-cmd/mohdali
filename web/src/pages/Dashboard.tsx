@@ -31,6 +31,7 @@ interface Summary {
   activeCount: number;
   supportTotal: number;
   supportCount: number;
+  coursesTotalCost: number;
   byCategory: CategoryBreakdown[];
   coursesCount: number;
   enrollmentsCount: number;
@@ -76,7 +77,12 @@ export default function Dashboard() {
             </div>
             <div className="stat-card">
               <div className="value">{summary.supportTotal.toLocaleString("ar-SA")} ريال</div>
-              <div className="label">إجمالي الدعم المصروف ({summary.year})</div>
+              <div className="label">
+                إجمالي الدعم المصروف ({summary.year})
+                {summary.coursesTotalCost > 0 && (
+                  <span style={{ display: "block", fontSize: 11 }}>يشمل تكلفة الدورات التدريبية</span>
+                )}
+              </div>
             </div>
             <div className="stat-card">
               <div className="value">{summary.supportCount}</div>

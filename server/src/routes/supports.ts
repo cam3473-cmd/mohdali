@@ -7,7 +7,7 @@ export const supportsRouter = Router();
 supportsRouter.use(requireAuth);
 
 // تصنيفات الدعم الموحّدة (يشملها جميعاً المجال الاجتماعي للجمعية)
-export const SUPPORT_CATEGORIES = ["IN_KIND", "CASH", "HOUSING", "ECONOMIC", "HEALTH", "EDUCATIONAL"] as const;
+export const SUPPORT_CATEGORIES = ["IN_KIND", "CASH", "HOUSING", "ECONOMIC", "HEALTH", "EDUCATIONAL", "SERVICES"] as const;
 
 const schema = z.object({
   beneficiaryId: z.string().min(1),
@@ -35,6 +35,16 @@ supportsRouter.get("/", async (req, res) => {
     orderBy: { supportDate: "desc" },
   });
   res.json(items);
+});
+
+// تفاصيل سجل دعم واحد (تُستخدم لعرض سند الصرف القابل للطباعة)
+supportsRouter.get("/:id", async (req, res) => {
+  const item = await prisma.support.findUnique({
+    where: { id: req.params.id },
+    include: { beneficiary: true, batch: true },
+  });
+  if (!item) return res.status(404).json({ error: "السجل غير موجود" });
+  res.json(item);
 });
 
 supportsRouter.post("/", async (req, res) => {

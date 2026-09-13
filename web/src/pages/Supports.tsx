@@ -50,7 +50,7 @@ export default function Supports() {
           >
             تصدير Excel
           </button>
-          <Link to="/campaigns?new=1" className="btn">
+          <Link to="/batches?new=1" className="btn">
             + إضافة دعم
           </Link>
         </div>
@@ -104,7 +104,10 @@ export default function Supports() {
                   <td>{s.description || "-"}</td>
                   <td>{DISBURSEMENT_STATUS_LABEL[s.status] ?? s.status}</td>
                   <td>{new Date(s.supportDate).toLocaleDateString("ar-SA")}</td>
-                  <td>
+                  <td style={{ display: "flex", gap: 6 }}>
+                    <Link to={`/supports/${s.id}/voucher`} className="btn secondary small">
+                      سند صرف
+                    </Link>
                     <button className="btn danger small" onClick={() => handleDelete(s.id)}>
                       حذف
                     </button>

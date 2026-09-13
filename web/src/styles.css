@@ -364,6 +364,8 @@ tr:hover td {
 
 .modal h3 {
   margin-top: 0;
+  cursor: move;
+  user-select: none;
 }
 
 .modal-actions {
@@ -470,4 +472,77 @@ tr:hover td {
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
+}
+
+/* سندات الاستلام والصرف القابلة للطباعة */
+.voucher {
+  width: 560px;
+  max-width: 100%;
+  border: 2px solid var(--primary-dark);
+  border-radius: 14px;
+  padding: 26px 30px;
+  background: #fff;
+  margin: 0 auto;
+}
+.voucher-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 2px solid var(--primary-dark);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+.voucher-head h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--primary-dark);
+}
+.voucher-head .sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.voucher-title {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.voucher-title h3 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--primary-dark);
+}
+.voucher-title .num {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.voucher .row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.voucher .row span:first-child {
+  color: var(--muted);
+}
+.voucher .row span:last-child {
+  font-weight: 700;
+}
+.voucher-signature {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 40px;
+  gap: 24px;
+}
+.voucher-signature .box {
+  flex: 1;
+  text-align: center;
+}
+.voucher-signature .line {
+  border-top: 1px solid var(--text);
+  margin-top: 40px;
+  padding-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
 }

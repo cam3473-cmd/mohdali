@@ -5,7 +5,7 @@ import os from "os";
 import { authRouter } from "./routes/auth";
 import { beneficiariesRouter } from "./routes/beneficiaries";
 import { supportsRouter } from "./routes/supports";
-import { campaignsRouter } from "./routes/campaigns";
+import { batchesRouter } from "./routes/batches";
 import { coursesRouter } from "./routes/courses";
 import { usersRouter } from "./routes/users";
 import { reportsRouter } from "./routes/reports";
@@ -34,7 +34,7 @@ app.get("/api/network-info", (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/beneficiaries", beneficiariesRouter);
 app.use("/api/supports", supportsRouter);
-app.use("/api/campaigns", campaignsRouter);
+app.use("/api/batches", batchesRouter);
 app.use("/api/courses", coursesRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/reports", reportsRouter);

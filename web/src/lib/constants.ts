@@ -5,6 +5,23 @@ export const SUPPORT_CATEGORY_LABEL: Record<string, string> = {
   ECONOMIC: "اقتصادي",
   HEALTH: "صحي",
   EDUCATIONAL: "تعليمي",
+  SERVICES: "خدمات",
+};
+
+export const DISTRIBUTION_METHOD_LABEL: Record<string, string> = {
+  UNIFIED: "مبلغ موحّد لكامل الأسرة",
+  HEAD_PLUS_DEPENDENTS: "رب الأسرة + مبلغ لكل تابع",
+};
+
+// القيمة الافتراضية الذكية لطريقة التوزيع حسب نوع الدعم (قابلة للتغيير دوماً لكل دفعة)
+export const DEFAULT_DISTRIBUTION_METHOD: Record<string, string> = {
+  IN_KIND: "UNIFIED",
+  CASH: "HEAD_PLUS_DEPENDENTS",
+  HOUSING: "HEAD_PLUS_DEPENDENTS",
+  ECONOMIC: "HEAD_PLUS_DEPENDENTS",
+  HEALTH: "HEAD_PLUS_DEPENDENTS",
+  EDUCATIONAL: "HEAD_PLUS_DEPENDENTS",
+  SERVICES: "UNIFIED",
 };
 
 export const SUPPORT_CATEGORIES = Object.keys(SUPPORT_CATEGORY_LABEL);

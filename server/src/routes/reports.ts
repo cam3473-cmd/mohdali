@@ -22,6 +22,7 @@ const SUPPORT_CATEGORY_AR: Record<string, string> = {
   ECONOMIC: "اقتصادي",
   HEALTH: "صحي",
   EDUCATIONAL: "تعليمي",
+  SERVICES: "خدمات",
 };
 const DISBURSEMENT_STATUS_AR: Record<string, string> = {
   PENDING: "معلّق",
@@ -64,26 +65,35 @@ reportsRouter.get("/summary", async (req, res) => {
   const { year } = req.query as Record<string, string>;
   const y = year ? parseInt(year, 10) : new Date().getFullYear();
 
-  const [beneficiariesCount, activeCount, disbursed, byCategory, coursesCount, enrollmentsCount] = await Promise.all([
-    prisma.beneficiary.count(),
-    prisma.beneficiary.count({ where: { fileStatus: "ACTIVE" } }),
-    prisma.support.aggregate({ where: { year: y, status: "DISBURSED" }, _sum: { amount: true }, _count: true }),
-    prisma.support.groupBy({
-      by: ["category"],
-      where: { year: y, status: "DISBURSED" },
-      _sum: { amount: true },
-      _count: true,
-    }),
-    prisma.course.count(),
-    prisma.courseEnrollment.count(),
-  ]);
+  const [beneficiariesCount, activeCount, disbursed, byCategory, coursesCount, participantsCount, coursesCostAgg] =
+    await Promise.all([
+      prisma.beneficiary.count(),
+      prisma.beneficiary.count({ where: { fileStatus: "ACTIVE" } }),
+      prisma.support.aggregate({ where: { year: y, status: "DISBURSED" }, _sum: { amount: true }, _count: true }),
+      prisma.support.groupBy({
+        by: ["category"],
+        where: { year: y, status: "DISBURSED" },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.course.count(),
+      prisma.courseParticipant.count(),
+      // تكلفة الدورات التي بدأت خلال السنة نفسها، تُضاف كرقم واحد لإجمالي الدعم العام
+      prisma.course.aggregate({
+        where: { startDate: { gte: new Date(`${y}-01-01`), lt: new Date(`${y + 1}-01-01`) } },
+        _sum: { totalCost: true },
+      }),
+    ]);
+
+  const coursesTotalCost = coursesCostAgg._sum.totalCost ?? 0;
 
   res.json({
     year: y,
     beneficiariesCount,
     activeCount,
-    supportTotal: disbursed._sum.amount ?? 0,
+    supportTotal: (disbursed._sum.amount ?? 0) + coursesTotalCost,
     supportCount: disbursed._count,
+    coursesTotalCost,
     byCategory: byCategory.map((c) => ({
       category: c.category,
       categoryLabel: SUPPORT_CATEGORY_AR[c.category] ?? c.category,
@@ -91,7 +101,7 @@ reportsRouter.get("/summary", async (req, res) => {
       count: c._count,
     })),
     coursesCount,
-    enrollmentsCount,
+    enrollmentsCount: participantsCount,
   });
 });
 
@@ -198,7 +208,7 @@ reportsRouter.get("/supports.xlsx", async (req, res) => {
 // تقرير الدورات التدريبية والمستفيدين منها
 reportsRouter.get("/courses.xlsx", async (req, res) => {
   const courses = await prisma.course.findMany({
-    include: { enrollments: { include: { beneficiary: true } } },
+    include: { participants: { include: { beneficiary: true } } },
     orderBy: { startDate: "asc" },
   });
 
@@ -210,7 +220,8 @@ reportsRouter.get("/courses.xlsx", async (req, res) => {
     { header: "المدرب", key: "trainer", width: 18 },
     { header: "تاريخ البدء", key: "startDate", width: 14 },
     { header: "تاريخ الانتهاء", key: "endDate", width: 14 },
-    { header: "عدد المسجلين", key: "enrolled", width: 14 },
+    { header: "التكلفة الإجمالية (ريال)", key: "totalCost", width: 18 },
+    { header: "عدد المشاركين", key: "enrolled", width: 14 },
     { header: "عدد المكملين", key: "completed", width: 14 },
   ];
   courses.forEach((c) => {
@@ -220,29 +231,40 @@ reportsRouter.get("/courses.xlsx", async (req, res) => {
       trainer: c.trainer ?? "",
       startDate: c.startDate.toISOString().slice(0, 10),
       endDate: c.endDate ? c.endDate.toISOString().slice(0, 10) : "",
-      enrolled: c.enrollments.length,
-      completed: c.enrollments.filter((e) => e.status === "COMPLETED").length,
+      totalCost: c.totalCost ?? "",
+      enrolled: c.participants.length,
+      completed: c.participants.filter((p) => p.status === "COMPLETED").length,
     });
   });
   styleHeader(sheet);
 
-  const detailSheet = workbook.addWorksheet("تفاصيل المسجلين");
+  const detailSheet = workbook.addWorksheet("تفاصيل المشاركين");
   detailSheet.columns = [
     { header: "اسم الدورة", key: "course", width: 24 },
-    { header: "رقم الهوية", key: "nationalId", width: 16 },
-    { header: "اسم المستفيد", key: "fullName", width: 26 },
+    { header: "الاسم", key: "fullName", width: 26 },
+    { header: "السجل المدني", key: "civilId", width: 16 },
+    { header: "الجوال", key: "phone", width: 14 },
+    { header: "تاريخ الميلاد الهجري", key: "birthDateHijri", width: 16 },
+    { header: "تاريخ الميلاد الميلادي", key: "birthDate", width: 16 },
+    { header: "البريد الإلكتروني", key: "email", width: 22 },
+    { header: "مستفيد مرتبط (إن وُجد)", key: "linkedBeneficiary", width: 22 },
     { header: "الحالة", key: "status", width: 12 },
     { header: "الشهادة", key: "cert", width: 10 },
   ];
   const STATUS_AR: Record<string, string> = { ENROLLED: "مسجل", COMPLETED: "أكمل", DROPPED: "منسحب" };
   courses.forEach((c) => {
-    c.enrollments.forEach((e) => {
+    c.participants.forEach((p) => {
       detailSheet.addRow({
         course: c.title,
-        nationalId: e.beneficiary.nationalId,
-        fullName: e.beneficiary.fullName,
-        status: STATUS_AR[e.status] ?? e.status,
-        cert: e.certificateIssued ? "صدرت" : "لم تصدر",
+        fullName: p.fullName,
+        civilId: p.civilId ?? "",
+        phone: p.phone ?? "",
+        birthDateHijri: p.birthDateHijri ?? "",
+        birthDate: p.birthDate ? p.birthDate.toISOString().slice(0, 10) : "",
+        email: p.email ?? "",
+        linkedBeneficiary: p.beneficiary?.fullName ?? "",
+        status: STATUS_AR[p.status] ?? p.status,
+        cert: p.certificateIssued ? "صدرت" : "لم تصدر",
       });
     });
   });
@@ -260,7 +282,7 @@ reportsRouter.get("/annual-summary.xlsx", async (req, res) => {
     prisma.beneficiary.findMany(),
     // يقتصر التقرير الرسمي على الدعم المصروف فعلياً، مع استبعاد الطلبات المعلّقة أو الملغاة
     prisma.support.findMany({ where: { year: y, status: "DISBURSED" }, include: { beneficiary: true } }),
-    prisma.course.findMany({ include: { enrollments: true } }),
+    prisma.course.findMany({ include: { participants: true } }),
   ]);
 
   const workbook = new ExcelJS.Workbook();
@@ -292,11 +314,12 @@ reportsRouter.get("/annual-summary.xlsx", async (req, res) => {
   }
   summaryRows.push(
     { label: "إجمالي عدد الدورات التدريبية", value: courses.length },
-    { label: "إجمالي عدد المستفيدين المسجلين بالدورات", value: courses.reduce((s, c) => s + c.enrollments.length, 0) },
+    { label: "إجمالي عدد المشاركين بالدورات", value: courses.reduce((s, c) => s + c.participants.length, 0) },
     {
       label: "إجمالي عدد المكملين للدورات",
-      value: courses.reduce((s, c) => s + c.enrollments.filter((e) => e.status === "COMPLETED").length, 0),
-    }
+      value: courses.reduce((s, c) => s + c.participants.filter((p) => p.status === "COMPLETED").length, 0),
+    },
+    { label: "إجمالي تكلفة الدورات التدريبية (ريال)", value: courses.reduce((s, c) => s + (c.totalCost ?? 0), 0) }
   );
   summary.addRows(summaryRows);
   styleHeader(summary);

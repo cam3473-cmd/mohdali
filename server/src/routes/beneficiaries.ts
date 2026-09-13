@@ -285,7 +285,7 @@ beneficiariesRouter.get("/:id", async (req, res) => {
     where: { id: req.params.id },
     include: {
       supports: { orderBy: { supportDate: "desc" } },
-      enrollments: { include: { course: true } },
+      participants: { include: { course: true } },
     },
   });
   if (!item) return res.status(404).json({ error: "المستفيد غير موجود" });

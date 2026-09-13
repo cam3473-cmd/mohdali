@@ -18,6 +18,7 @@ const emptyForm = {
   endDate: "",
   seatsCount: "",
   location: "",
+  totalCost: "",
   notes: "",
 };
 
@@ -60,6 +61,7 @@ export default function Courses() {
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         seatsCount: form.seatsCount ? Number(form.seatsCount) : null,
         location: form.location || null,
+        totalCost: form.totalCost ? Number(form.totalCost) : null,
         notes: form.notes || null,
       });
       setShowForm(false);
@@ -102,7 +104,8 @@ export default function Courses() {
                 <th>الفئة</th>
                 <th>المدرب</th>
                 <th>تاريخ البدء</th>
-                <th>عدد المسجلين</th>
+                <th>التكلفة الإجمالية</th>
+                <th>عدد المشاركين</th>
                 <th></th>
               </tr>
             </thead>
@@ -115,7 +118,8 @@ export default function Courses() {
                   <td>{CATEGORY_LABEL[c.category]}</td>
                   <td>{c.trainer || "-"}</td>
                   <td>{new Date(c.startDate).toLocaleDateString("ar-SA")}</td>
-                  <td>{c._count.enrollments}</td>
+                  <td>{c.totalCost != null ? `${c.totalCost.toLocaleString("ar-SA")} ريال` : "-"}</td>
+                  <td>{c._count.participants}</td>
                   <td>
                     <button className="btn danger small" onClick={() => handleDelete(c.id)}>
                       حذف
@@ -167,6 +171,10 @@ export default function Courses() {
               <div className="field">
                 <label>مكان الانعقاد</label>
                 <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>التكلفة الإجمالية (ريال)</label>
+                <input type="number" value={form.totalCost} onChange={(e) => setForm({ ...form, totalCost: e.target.value })} />
               </div>
             </div>
             <div className="modal-actions">
