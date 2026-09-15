@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import IdCard, { IdCardBeneficiary } from "../components/IdCard";
 
 export default function BeneficiaryCardsAll() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<IdCardBeneficiary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,8 +32,11 @@ export default function BeneficiaryCardsAll() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Link to="/beneficiaries" className="btn secondary">
+          <button className="btn secondary" onClick={() => navigate(-1)}>
             رجوع
+          </button>
+          <Link to="/" className="btn secondary">
+            الصفحة الرئيسية
           </Link>
           <button className="btn" onClick={() => window.print()} disabled={loading || items.length === 0}>
             طباعة الكل
