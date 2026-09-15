@@ -52,10 +52,14 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // تقديم واجهة الويب المبنية (في وضع الإنتاج / تطبيق سطح المكتب)
+// ملفات JS/CSS تحمل بصمة (hash) في اسمها فيصح تخزينها مؤقتاً بأمان، أما index.html
+// فيجب ألا يُخزَّن أبداً: هو من يُحدّد أسماء تلك الملفات، وتخزينه مؤقتاً بالخطأ يعني
+// بقاء الواجهة القديمة تعمل بعد كل تحديث وتثبيت جديد للتطبيق رغم نجاح البناء فعلياً
 const webDist = path.join(__dirname, "../../web/dist");
-app.use(express.static(webDist));
+app.use(express.static(webDist, { index: false }));
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api/")) return next();
+  res.set("Cache-Control", "no-store");
   res.sendFile(path.join(webDist, "index.html"), (err) => {
     if (err) next();
   });
