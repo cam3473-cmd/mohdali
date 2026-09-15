@@ -101,16 +101,38 @@ function startServer(databaseUrl) {
       env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(PORT) },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
     });
+    let settled = false;
     serverProcess.stdout.on("data", (d) => log(`[server] ${d}`.trimEnd()));
     serverProcess.stderr.on("data", (d) => log(`[server] ${d}`.trimEnd()));
-    serverProcess.once("error", reject);
+    serverProcess.once("error", (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
     serverProcess.once("exit", (code) => {
+      if (settled) return;
       if (code !== null && code !== 0) {
+        settled = true;
         reject(new Error(`توقف الخادم الداخلي بشكل غير متوقع (رمز الخروج ${code}). راجع ملف السجل: ${logPath()}`));
       }
     });
-    // امنح الخادم لحظة ليبدأ الاستماع قبل فتح النافذة
-    setTimeout(resolve, 1500);
+    // ننتظر إشعاراً صريحاً من الخادم بأنه بدأ الاستماع فعلياً (بدل مهلة ثابتة قد تُخفي فشلاً صامتاً
+    // مثل انشغال المنفذ)، مع مهلة قصوى احتياطية في حال تعطّلت آلية الإشعار نفسها
+    serverProcess.once("message", (msg) => {
+      if (settled) return;
+      if (msg && msg.type === "server-ready") {
+        settled = true;
+        resolve();
+      } else if (msg && msg.type === "server-error") {
+        settled = true;
+        reject(new Error(`تعذر بدء الخادم: ${msg.message}. راجع ملف السجل: ${logPath()}`));
+      }
+    });
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`لم يستجب الخادم الداخلي خلال المهلة المتوقعة. راجع ملف السجل: ${logPath()}`));
+    }, 15000);
   });
 }
 

@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import compression from "compression";
@@ -65,6 +66,15 @@ process.on("unhandledRejection", (err) => console.error("خطأ غير معال�
 process.on("uncaughtException", (err) => console.error("استثناء غير معالج:", err));
 
 // الاستماع على جميع عناوين الشبكة المحلية ليتمكن بقية الموظفين من الدخول عبر المتصفح
-app.listen(PORT, "0.0.0.0", () => {
+const httpServer = app.listen(PORT, "0.0.0.0", () => {
   console.log(`الخادم يعمل على المنفذ ${PORT}`);
+  // إشعار العملية الأم (Electron) بأن الخادم جاهز فعلياً بدل انتظار مهلة ثابتة قد لا تكفي أو تُخفي فشلاً صامتاً
+  process.send?.({ type: "server-ready" });
+});
+
+// فشل الاستماع (مثل انشغال المنفذ بعملية سابقة) يجب أن يُعلم العملية الأم بدل ترك الخادم متوقفاً بصمت
+httpServer.on("error", (err) => {
+  console.error("فشل بدء الاستماع على المنفذ:", err);
+  process.send?.({ type: "server-error", message: (err as Error).message });
+  process.exit(1);
 });
