@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import path from "path";
 import os from "os";
 import { authRouter } from "./routes/auth";
@@ -14,6 +15,8 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
 
 app.use(cors());
+// يضغط استجابات JSON والملفات الساكنة، يفيد سرعة الاستجابة عبر الشبكة المحلية للأجهزة الأخرى
+app.use(compression());
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));

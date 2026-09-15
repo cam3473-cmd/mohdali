@@ -270,7 +270,7 @@ beneficiariesRouter.get("/", async (req, res) => {
   const [items, total] = await Promise.all([
     prisma.beneficiary.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { fullName: "asc" },
       take,
       skip,
     }),

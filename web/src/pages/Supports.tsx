@@ -1,15 +1,32 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, downloadReport } from "../lib/api";
+import { api, apiErrorMessage, downloadReport } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL, DISBURSEMENT_STATUS_LABEL } from "../lib/constants";
+import NumericInput from "../components/NumericInput";
 
 const currentYear = new Date().getFullYear();
+
+function editFormFrom(s: any) {
+  return {
+    category: s.category,
+    amount: s.amount != null ? String(s.amount) : "",
+    description: s.description ?? "",
+    quantity: s.quantity != null ? String(s.quantity) : "",
+    status: s.status,
+    supportDate: s.supportDate.slice(0, 10),
+    notes: s.notes ?? "",
+  };
+}
 
 export default function Supports() {
   const [items, setItems] = useState<any[]>([]);
   const [year, setYear] = useState(String(currentYear));
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<ReturnType<typeof editFormFrom> | null>(null);
+  const [editError, setEditError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -30,6 +47,34 @@ export default function Supports() {
     if (!confirm("هل تريد حذف سجل الدعم هذا؟")) return;
     await api.delete(`/supports/${id}`);
     load();
+  }
+
+  function openEdit(s: any) {
+    setEditingId(s.id);
+    setEditForm(editFormFrom(s));
+    setEditError("");
+  }
+
+  async function handleEditSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!editForm || !editingId) return;
+    setEditError("");
+    try {
+      await api.put(`/supports/${editingId}`, {
+        category: editForm.category,
+        amount: editForm.amount ? Number(editForm.amount) : null,
+        description: editForm.description || null,
+        quantity: editForm.quantity ? Number(editForm.quantity) : null,
+        status: editForm.status,
+        supportDate: new Date(editForm.supportDate).toISOString(),
+        notes: editForm.notes || null,
+      });
+      setEditingId(null);
+      setEditForm(null);
+      load();
+    } catch (err) {
+      setEditError(apiErrorMessage(err));
+    }
   }
 
   const total = items.filter((s) => s.status === "DISBURSED").reduce((sum, s) => sum + (s.amount ?? 0), 0);
@@ -62,7 +107,7 @@ export default function Supports() {
 
       <div className="toolbar">
         <label>السنة:</label>
-        <input type="number" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: 100 }} />
+        <NumericInput value={year} onChange={setYear} style={{ width: 100 }} />
         <label>النوع:</label>
         <select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">كل الأنواع</option>
@@ -108,6 +153,9 @@ export default function Supports() {
                     <Link to={`/supports/${s.id}/voucher`} className="btn secondary small">
                       سند صرف
                     </Link>
+                    <button className="btn secondary small" onClick={() => openEdit(s)}>
+                      تعديل
+                    </button>
                     <button className="btn danger small" onClick={() => handleDelete(s.id)}>
                       حذف
                     </button>
@@ -118,6 +166,65 @@ export default function Supports() {
           </table>
         )}
       </div>
+
+      {editForm && (
+        <div className="modal-backdrop" onClick={() => setEditingId(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleEditSubmit}>
+            <h3>تعديل سجل دعم</h3>
+            {editError && <div className="error-banner">{editError}</div>}
+            <div className="form-grid">
+              <div className="field">
+                <label>نوع الدعم</label>
+                <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}>
+                  {Object.entries(SUPPORT_CATEGORY_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>الحالة</label>
+                <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                  {Object.entries(DISBURSEMENT_STATUS_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>المبلغ (ريال)</label>
+                <NumericInput value={editForm.amount} onChange={(v) => setEditForm({ ...editForm, amount: v })} />
+              </div>
+              <div className="field">
+                <label>الكمية (للعيني)</label>
+                <NumericInput value={editForm.quantity} onChange={(v) => setEditForm({ ...editForm, quantity: v })} />
+              </div>
+              <div className="field">
+                <label>تاريخ الصرف *</label>
+                <input required type="date" value={editForm.supportDate} onChange={(e) => setEditForm({ ...editForm, supportDate: e.target.value })} />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>الوصف</label>
+                <input value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              </div>
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>ملاحظات</label>
+                <textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setEditingId(null)}>
+                إلغاء
+              </button>
+              <button type="submit" className="btn">
+                حفظ
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

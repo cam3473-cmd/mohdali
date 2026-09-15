@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL, DISTRIBUTION_METHOD_LABEL } from "../lib/constants";
+import NumericInput from "../components/NumericInput";
 
 function suggestedAmount(batch: any, familyMembersCount: number | null | undefined) {
   if (batch.distributionMethod === "UNIFIED") {
@@ -26,6 +27,7 @@ export default function BatchDetail() {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [sharedDescription, setSharedDescription] = useState("");
   const [preselected, setPreselected] = useState(false);
+  const searchRequestId = useRef(0);
 
   async function loadBatch() {
     setLoading(true);
@@ -38,7 +40,10 @@ export default function BatchDetail() {
   }
 
   async function loadBeneficiaries() {
+    const requestId = ++searchRequestId.current;
     const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: "ACTIVE", pageSize: 5000 } });
+    // تجاهل الاستجابة إن وصلت بعد طلب بحث أحدث منها (يمنع ظهور نتائج بحث قديمة)
+    if (requestId !== searchRequestId.current) return;
     setBeneficiaries(res.data.items);
   }
 
@@ -147,6 +152,9 @@ export default function BatchDetail() {
 
   const alreadyDistributedIds = new Set(batch.supports.map((s: any) => s.beneficiaryId));
   const isClosed = batch.status === "CLOSED";
+  const sortedSupports = [...batch.supports].sort((a: any, b: any) =>
+    a.beneficiary.fullName.localeCompare(b.beneficiary.fullName, "ar")
+  );
 
   return (
     <div>
@@ -155,6 +163,9 @@ export default function BatchDetail() {
         <div style={{ display: "flex", gap: 8 }}>
           <Link to={`/batches/${id}/receipt`} className="btn secondary">
             سند استلام
+          </Link>
+          <Link to={`/batches/${id}/vouchers`} className="btn secondary">
+            طباعة جميع سندات الصرف
           </Link>
           <Link to="/batches" className="btn secondary">
             رجوع إلى دفعات الدعم
@@ -240,11 +251,10 @@ export default function BatchDetail() {
                       </td>
                       <td>{b.familyMembersCount ?? "-"}</td>
                       <td>
-                        <input
-                          type="number"
+                        <NumericInput
                           style={{ width: 110 }}
                           value={amounts[b.id] ?? ""}
-                          onChange={(e) => setAmounts({ ...amounts, [b.id]: e.target.value })}
+                          onChange={(v) => setAmounts({ ...amounts, [b.id]: v })}
                           disabled={!selected.has(b.id)}
                         />
                       </td>
@@ -294,7 +304,7 @@ export default function BatchDetail() {
               </tr>
             </thead>
             <tbody>
-              {batch.supports.map((s: any) => (
+              {sortedSupports.map((s: any) => (
                 <tr key={s.id}>
                   <td>{s.beneficiary.fullName}</td>
                   <td>{s.amount != null ? `${s.amount.toLocaleString("ar-SA")} ريال` : "-"}</td>

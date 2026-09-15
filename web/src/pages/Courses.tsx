@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage, downloadReport } from "../lib/api";
+import NumericInput from "../components/NumericInput";
 
 const CATEGORY_LABEL: Record<string, string> = {
   COMPUTER: "حاسب آلي",
@@ -166,7 +167,7 @@ export default function Courses() {
               </div>
               <div className="field">
                 <label>عدد المقاعد</label>
-                <input type="number" value={form.seatsCount} onChange={(e) => setForm({ ...form, seatsCount: e.target.value })} />
+                <NumericInput value={form.seatsCount} onChange={(v) => setForm({ ...form, seatsCount: v })} />
               </div>
               <div className="field">
                 <label>مكان الانعقاد</label>
@@ -174,7 +175,7 @@ export default function Courses() {
               </div>
               <div className="field">
                 <label>التكلفة الإجمالية (ريال)</label>
-                <input type="number" value={form.totalCost} onChange={(e) => setForm({ ...form, totalCost: e.target.value })} />
+                <NumericInput value={form.totalCost} onChange={(v) => setForm({ ...form, totalCost: v })} />
               </div>
             </div>
             <div className="modal-actions">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { downloadReport } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL } from "../lib/constants";
+import NumericInput from "../components/NumericInput";
 
 const currentYear = new Date().getFullYear();
 
@@ -22,7 +23,7 @@ export default function Reports() {
         </p>
         <div className="toolbar">
           <label>السنة:</label>
-          <input type="number" value={year} onChange={(e) => setYear(e.target.value)} style={{ width: 100 }} />
+          <NumericInput value={year} onChange={setYear} style={{ width: 100 }} />
           <button
             className="btn"
             onClick={() => downloadReport(`/reports/annual-summary.xlsx?year=${year}`, `التقرير_السنوي_الشامل_${year}.xlsx`)}

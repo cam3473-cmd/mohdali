@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { SUPPORT_CATEGORY_LABEL, DISTRIBUTION_METHOD_LABEL, DEFAULT_DISTRIBUTION_METHOD } from "../lib/constants";
+import NumericInput from "../components/NumericInput";
 
 const currentYear = new Date().getFullYear();
 
@@ -180,20 +181,20 @@ export default function Batches() {
               </div>
               <div className="field">
                 <label>السنة *</label>
-                <input required type="number" value={form.year} onChange={(e) => setForm({ ...form, year: e.target.value })} />
+                <NumericInput required value={form.year} onChange={(v) => setForm({ ...form, year: v })} />
               </div>
 
               <div className="field">
                 <label>المبلغ الإجمالي المباشر (ريال)</label>
-                <input type="number" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} placeholder="للنقدي عادة" />
+                <NumericInput value={form.totalAmount} onChange={(v) => setForm({ ...form, totalAmount: v })} placeholder="للنقدي عادة" />
               </div>
               <div className="field">
                 <label>عدد الوحدات (للعيني)</label>
-                <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+                <NumericInput value={form.quantity} onChange={(v) => setForm({ ...form, quantity: v })} />
               </div>
               <div className="field">
                 <label>سعر الوحدة (للعيني)</label>
-                <input type="number" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} />
+                <NumericInput value={form.unitPrice} onChange={(v) => setForm({ ...form, unitPrice: v })} />
               </div>
               {form.quantity && form.unitPrice && (
                 <div className="field" style={{ gridColumn: "1 / -1", fontSize: 13, color: "var(--muted)" }}>
@@ -215,17 +216,17 @@ export default function Batches() {
               {form.distributionMethod === "UNIFIED" ? (
                 <div className="field">
                   <label>المبلغ/القيمة الموحّدة لكامل الأسرة</label>
-                  <input type="number" value={form.unifiedAmount} onChange={(e) => setForm({ ...form, unifiedAmount: e.target.value })} />
+                  <NumericInput value={form.unifiedAmount} onChange={(v) => setForm({ ...form, unifiedAmount: v })} />
                 </div>
               ) : (
                 <>
                   <div className="field">
                     <label>مبلغ رب الأسرة</label>
-                    <input type="number" value={form.headAmount} onChange={(e) => setForm({ ...form, headAmount: e.target.value })} />
+                    <NumericInput value={form.headAmount} onChange={(v) => setForm({ ...form, headAmount: v })} />
                   </div>
                   <div className="field">
                     <label>مبلغ كل تابع</label>
-                    <input type="number" value={form.dependentAmount} onChange={(e) => setForm({ ...form, dependentAmount: e.target.value })} />
+                    <NumericInput value={form.dependentAmount} onChange={(v) => setForm({ ...form, dependentAmount: v })} />
                   </div>
                 </>
               )}

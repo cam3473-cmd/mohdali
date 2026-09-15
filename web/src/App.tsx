@@ -13,6 +13,7 @@ import SupportVoucher from "./pages/SupportVoucher";
 import Batches from "./pages/Batches";
 import BatchDetail from "./pages/BatchDetail";
 import BatchReceiptVoucher from "./pages/BatchReceiptVoucher";
+import BatchVouchersAll from "./pages/BatchVouchersAll";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Reports from "./pages/Reports";
@@ -57,6 +58,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <BatchReceiptVoucher />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/batches/:id/vouchers"
+        element={
+          <RequireAuth>
+            <BatchVouchersAll />
           </RequireAuth>
         }
       />

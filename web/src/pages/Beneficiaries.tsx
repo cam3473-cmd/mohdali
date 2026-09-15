@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { CASE_TYPE_LABEL } from "../lib/constants";
+import NumericInput from "../components/NumericInput";
 
 interface Beneficiary {
   id: string;
@@ -65,14 +66,18 @@ export default function Beneficiaries() {
     errors: { row: number; message: string }[];
   } | null>(null);
   const [importError, setImportError] = useState("");
+  const searchRequestId = useRef(0);
 
   async function load() {
+    const requestId = ++searchRequestId.current;
     setLoading(true);
     try {
       const res = await api.get("/beneficiaries", { params: { q: q || undefined, status: status || undefined, pageSize: 5000 } });
+      // تجاهل الاستجابة إن وصلت بعد طلب بحث أحدث منها (يمنع ظهور نتائج بحث قديمة)
+      if (requestId !== searchRequestId.current) return;
       setItems(res.data.items);
     } finally {
-      setLoading(false);
+      if (requestId === searchRequestId.current) setLoading(false);
     }
   }
 
@@ -321,18 +326,16 @@ export default function Beneficiaries() {
               </div>
               <div className="field">
                 <label>عدد أفراد الأسرة</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={form.familyMembersCount}
-                  onChange={(e) => setForm({ ...form, familyMembersCount: e.target.value })}
+                  onChange={(v) => setForm({ ...form, familyMembersCount: v })}
                 />
               </div>
               <div className="field">
                 <label>الدخل الشهري (ريال)</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={form.monthlyIncome}
-                  onChange={(e) => setForm({ ...form, monthlyIncome: e.target.value })}
+                  onChange={(v) => setForm({ ...form, monthlyIncome: v })}
                 />
               </div>
               <div className="field">

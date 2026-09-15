@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import Logo from "../components/Logo";
 import { SUPPORT_CATEGORY_LABEL, DISTRIBUTION_METHOD_LABEL } from "../lib/constants";
 
 export default function BatchReceiptVoucher() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [batch, setBatch] = useState<any>(null);
 
   useEffect(() => {
@@ -25,10 +26,18 @@ export default function BatchReceiptVoucher() {
         }
       `}</style>
 
-      <div className="no-print" style={{ maxWidth: 560, margin: "0 auto 16px", display: "flex", justifyContent: "flex-end" }}>
-        <button className="btn" onClick={() => window.print()}>
-          طباعة السند
+      <div className="no-print" style={{ maxWidth: 560, margin: "0 auto 16px", display: "flex", justifyContent: "space-between" }}>
+        <button className="btn secondary" onClick={() => navigate(-1)}>
+          رجوع
         </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link to="/" className="btn secondary">
+            الصفحة الرئيسية
+          </Link>
+          <button className="btn" onClick={() => window.print()}>
+            طباعة السند
+          </button>
+        </div>
       </div>
 
       <div className="voucher">
