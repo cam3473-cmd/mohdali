@@ -56,6 +56,12 @@ export default function Supports() {
     setEditError("");
   }
 
+  function closeEdit() {
+    setEditingId(null);
+    setEditForm(null);
+    setEditError("");
+  }
+
   async function handleEditSubmit(e: FormEvent) {
     e.preventDefault();
     if (!editForm || !editingId) return;
@@ -70,8 +76,7 @@ export default function Supports() {
         supportDate: new Date(editForm.supportDate).toISOString(),
         notes: editForm.notes || null,
       });
-      setEditingId(null);
-      setEditForm(null);
+      closeEdit();
       load();
     } catch (err) {
       setEditError(apiErrorMessage(err));
@@ -244,7 +249,7 @@ export default function Supports() {
       </div>
 
       {editForm && (
-        <div className="modal-backdrop" onClick={() => setEditingId(null)}>
+        <div className="modal-backdrop" onClick={closeEdit}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={handleEditSubmit}>
             <h3>تعديل سجل دعم</h3>
             {editError && <div className="error-banner">{editError}</div>}
@@ -291,7 +296,7 @@ export default function Supports() {
               </div>
             </div>
             <div className="modal-actions">
-              <button type="button" className="btn secondary" onClick={() => setEditingId(null)}>
+              <button type="button" className="btn secondary" onClick={closeEdit}>
                 إلغاء
               </button>
               <button type="submit" className="btn">
