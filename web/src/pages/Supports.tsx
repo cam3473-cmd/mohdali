@@ -27,6 +27,7 @@ export default function Supports() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<ReturnType<typeof editFormFrom> | null>(null);
   const [editError, setEditError] = useState("");
+  const [groupByBeneficiary, setGroupByBeneficiary] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -79,6 +80,33 @@ export default function Supports() {
 
   const total = items.filter((s) => s.status === "DISBURSED").reduce((sum, s) => sum + (s.amount ?? 0), 0);
 
+  // تجميع سجلات الدعم حسب المستفيد لإظهار إجمالي ما استلمه كل شخص (حتى لو صُرف له أكثر من مرة)
+  // بدل الاكتفاء بعرض كل عملية صرف كسطر منفصل
+  const grouped = (() => {
+    const map = new Map<
+      string,
+      { beneficiaryId: string; fullName: string; count: number; totalAmount: number; lastDate: string }
+    >();
+    for (const s of items) {
+      const amount = s.status === "DISBURSED" ? s.amount ?? 0 : 0;
+      const existing = map.get(s.beneficiaryId);
+      if (existing) {
+        existing.count += 1;
+        existing.totalAmount += amount;
+        if (s.supportDate > existing.lastDate) existing.lastDate = s.supportDate;
+      } else {
+        map.set(s.beneficiaryId, {
+          beneficiaryId: s.beneficiaryId,
+          fullName: s.beneficiary.fullName,
+          count: 1,
+          totalAmount: amount,
+          lastDate: s.supportDate,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
+  })();
+
   return (
     <div>
       <div className="page-header">
@@ -117,7 +145,21 @@ export default function Supports() {
             </option>
           ))}
         </select>
-        <span style={{ marginRight: "auto", color: "var(--muted)" }}>
+        <div style={{ display: "flex", gap: 4, marginRight: "auto" }}>
+          <button
+            className={`btn ${groupByBeneficiary ? "secondary" : ""} small`}
+            onClick={() => setGroupByBeneficiary(false)}
+          >
+            تفصيلي (كل عملية صرف)
+          </button>
+          <button
+            className={`btn ${groupByBeneficiary ? "" : "secondary"} small`}
+            onClick={() => setGroupByBeneficiary(true)}
+          >
+            إجمالي لكل مستفيد
+          </button>
+        </div>
+        <span style={{ color: "var(--muted)" }}>
           إجمالي المصروف: <strong>{total.toLocaleString("ar-SA")} ريال</strong>
         </span>
       </div>
@@ -127,6 +169,40 @@ export default function Supports() {
           <p className="loading">جارٍ التحميل...</p>
         ) : items.length === 0 ? (
           <p className="empty-state">لا توجد سجلات دعم</p>
+        ) : groupByBeneficiary ? (
+          <table>
+            <thead>
+              <tr>
+                <th>المستفيد</th>
+                <th>عدد مرات الصرف</th>
+                <th>إجمالي المصروف</th>
+                <th>آخر تاريخ صرف</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map((g) => (
+                <tr key={g.beneficiaryId}>
+                  <td>{g.fullName}</td>
+                  <td>
+                    {g.count}
+                    {g.count > 1 && (
+                      <span style={{ marginRight: 6, fontSize: 12, color: "var(--danger, #c0392b)" }}>
+                        (صُرف له أكثر من مرة)
+                      </span>
+                    )}
+                  </td>
+                  <td>{g.totalAmount.toLocaleString("ar-SA")} ريال</td>
+                  <td>{new Date(g.lastDate).toLocaleDateString("ar-SA")}</td>
+                  <td>
+                    <Link to={`/beneficiaries/${g.beneficiaryId}`} className="btn secondary small">
+                      تفاصيل المستفيد
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
           <table>
             <thead>

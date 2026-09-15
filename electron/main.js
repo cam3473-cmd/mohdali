@@ -37,17 +37,46 @@ function resolveNodeModulesPath(relativePath) {
   return found;
 }
 
+// مجلد بيانات محلي مضموناً بعيداً عن الشبكة: بعض بيئات الشركات/الجهات الحكومية تُطبّق
+// "إعادة توجيه المجلدات" (Folder Redirection) عبر سياسات المجموعة فتجعل AppData\Roaming
+// (وهو ما يعيده app.getPath("userData") افتراضياً على ويندوز) يشير فعلياً لمسار شبكي،
+// ما يُبطئ قاعدة بيانات SQLite بشدة لأنها تعتمد على قفل ملفات سريع لا يعمل جيداً عبر الشبكة.
+// AppData\Local (LOCALAPPDATA) لا تُعاد توجيهه عادةً لأن مايكروسوفت نفسها توصي بعدم ذلك
+// لبيانات التخزين المؤقت/المحلية، لذا نستخدمه صراحةً على ويندوز بدل الاعتماد على القيمة الافتراضية.
+function localDataRoot() {
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+    return path.join(process.env.LOCALAPPDATA, app.getName());
+  }
+  return app.getPath("userData");
+}
+
+// نقل بيانات موجودة من الموقع القديم (userData الافتراضي) إلى الموقع المحلي الجديد
+// عند أول تشغيل بعد هذا التحديث، حتى لا يفقد الموظفون بياناتهم المُدخلة سابقاً
+function migrateFromLegacyLocation(legacyDir, targetDir) {
+  if (legacyDir === targetDir) return;
+  if (!fs.existsSync(legacyDir)) return;
+  if (fs.existsSync(targetDir)) return; // الموقع الجديد يحتوي بيانات بالفعل، لا نكتب فوقها
+  try {
+    fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+    fs.renameSync(legacyDir, targetDir);
+    log(`تم نقل البيانات من الموقع القديم (${legacyDir}) إلى الموقع المحلي الجديد (${targetDir})`);
+  } catch (err) {
+    log(`تعذّر نقل البيانات من الموقع القديم تلقائياً: ${err.message}. سيتم إنشاء بيانات جديدة في الموقع الجديد.`);
+  }
+}
+
 function getDatabasePath() {
   if (!app.isPackaged) {
     return path.join(serverRoot(), "prisma", "dev.db");
   }
-  const dbDir = path.join(app.getPath("userData"), "database");
+  const dbDir = path.join(localDataRoot(), "database");
+  migrateFromLegacyLocation(path.join(app.getPath("userData"), "database"), dbDir);
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
   return path.join(dbDir, "data.db");
 }
 
 function logPath() {
-  return path.join(app.getPath("userData"), "logs", "app.log");
+  return path.join(localDataRoot(), "logs", "app.log");
 }
 
 function log(line) {
