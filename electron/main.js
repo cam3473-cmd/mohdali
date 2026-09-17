@@ -7,6 +7,16 @@ const { fork, spawn } = require("child_process");
 // بغض النظر عن كيفية تعيين electron-builder لاسم الحزمة داخلياً
 app.setName("AlSulailCharityBeneficiaries");
 
+// منع فتح أكثر من نسخة واحدة من التطبيق في نفس الوقت: بدون هذا، فتح التطبيق مرتين (أو
+// نسخة سابقة لم تُغلق فعلياً وبقيت في الخلفية) يجعل كل نسخة تحاول تشغيل خادمها الخاص على
+// نفس المنفذ 4000، فتفشل الثانية برسالة "المنفذ مستخدم" (EADDRINUSE). الحل القياسي في
+// Electron: النسخة الأولى تحتفظ بالقفل، وأي محاولة فتح لاحقة تُغلق نفسها فوراً وتُظهر
+// نافذة النسخة الأولى بدل تشغيل خادم ثانٍ يتصادم مع الأول.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 const PORT = 4000;
 
 let serverProcess;
@@ -229,26 +239,39 @@ async function createWindow() {
   mainWindow.loadURL(`http://localhost:${PORT}`);
 }
 
-app.whenReady().then(() => {
-  createWindow().catch((err) => {
-    log(`فشل بدء التشغيل: ${err.stack || err}`);
-    dialog.showErrorBox(
-      "تعذر تشغيل النظام",
-      `حدث خطأ أثناء تشغيل النظام:\n\n${err.message}\n\nراجع ملف السجل للتفاصيل:\n${logPath()}`
-    );
-    app.quit();
+// كل ما يلي يُسجَّل فقط عند الحصول على القفل فعلاً، حتى لا تحاول نسخة ثانية (سيُطلب منها
+// الإغلاق أعلاه) بدء خادمها الخاص قبل أن يكتمل إغلاقها فعلياً
+if (gotSingleInstanceLock) {
+  // تُستدعى في النسخة الأولى عند محاولة فتح نسخة ثانية من التطبيق: بدل تجاهل المحاولة،
+  // نُظهر نافذة النسخة الأولى الموجودة أصلاً (وهذا ما يتوقعه المستخدم عند نقر الأيقونة مجدداً)
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
   });
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  app.whenReady().then(() => {
+    createWindow().catch((err) => {
+      log(`فشل بدء التشغيل: ${err.stack || err}`);
+      dialog.showErrorBox(
+        "تعذر تشغيل النظام",
+        `حدث خطأ أثناء تشغيل النظام:\n\n${err.message}\n\nراجع ملف السجل للتفاصيل:\n${logPath()}`
+      );
+      app.quit();
+    });
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
   });
-});
 
-app.on("window-all-closed", () => {
-  if (serverProcess) serverProcess.kill();
-  if (process.platform !== "darwin") app.quit();
-});
+  app.on("window-all-closed", () => {
+    if (serverProcess) serverProcess.kill();
+    if (process.platform !== "darwin") app.quit();
+  });
 
-app.on("before-quit", () => {
-  if (serverProcess) serverProcess.kill();
-});
+  app.on("before-quit", () => {
+    if (serverProcess) serverProcess.kill();
+  });
+}
