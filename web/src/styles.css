@@ -293,6 +293,15 @@ tr:hover td {
   font-size: 14px;
 }
 
+.success-banner {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
 .login-page {
   min-height: 100vh;
   display: flex;

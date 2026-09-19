@@ -11,6 +11,7 @@ import { batchesRouter } from "./routes/batches";
 import { coursesRouter } from "./routes/courses";
 import { usersRouter } from "./routes/users";
 import { reportsRouter } from "./routes/reports";
+import { settingsRouter } from "./routes/settings";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
@@ -42,6 +43,7 @@ app.use("/api/batches", batchesRouter);
 app.use("/api/courses", coursesRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/settings", settingsRouter);
 
 // معالج أخطاء عام يمنع توقف الخادم بسبب استثناء غير متوقع في أحد المسارات
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

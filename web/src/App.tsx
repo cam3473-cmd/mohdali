@@ -18,6 +18,7 @@ import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user } = useAuth();
@@ -86,6 +87,7 @@ function AppRoutes() {
         <Route path="/courses/:id" element={<CourseDetail />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

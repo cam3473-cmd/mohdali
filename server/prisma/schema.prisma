@@ -78,6 +78,7 @@ model Support {
   createdAt     DateTime      @default(now())
   createdById   String?
   createdBy     User?         @relation("SupportCreatedBy", fields: [createdById], references: [id])
+  surveySentAt  DateTime? // تاريخ إرسال رسالة استبيان قياس الرضا لهذا الصرف (فارغ = لم تُرسل بعد)
 
   @@index([beneficiaryId])
   @@index([year])
@@ -150,4 +151,16 @@ model CourseParticipant {
   createdBy         User?        @relation("ParticipantCreatedBy", fields: [createdById], references: [id])
 
   @@index([courseId])
+}
+
+// إعدادات عامة للنظام - صف واحد فقط (id ثابت)، بدل جدول إعدادات عام (key/value) لأن عدد
+// الإعدادات محدود ومعروف مسبقاً. تُستخدم لإعدادات إرسال رسائل استبيان قياس الرضا.
+model AppSettings {
+  id                   String   @id @default("singleton")
+  smsApiKey            String? // مفتاح API لمنصة الرسائل النصية (OurSMS)
+  smsSenderName        String? // اسم المرسل المعتمد لدى منصة الرسائل النصية
+  surveyFormBaseUrl    String? // رابط نموذج استبيان قياس الرضا (Google Forms أو غيره)
+  surveyFormEntryParam String? // اسم حقل الرقم المرجعي في النموذج (مثل entry.1234567890)؛
+  // إن تُرك فارغاً يُرسَل الرابط العام دون تخصيص لكل مستفيد
+  updatedAt            DateTime @updatedAt
 }

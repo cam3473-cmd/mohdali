@@ -62,6 +62,25 @@ export default function Supports() {
     setEditError("");
   }
 
+  const [sendingSurveyId, setSendingSurveyId] = useState<string | null>(null);
+
+  async function sendSurvey(id: string) {
+    setSendingSurveyId(id);
+    try {
+      const res = await api.post("/supports/send-survey", { supportIds: [id] });
+      const result = res.data.results[0];
+      if (result.status === "sent") {
+        load();
+      } else {
+        alert(result.reason || "تعذر إرسال الاستبيان");
+      }
+    } catch (err) {
+      alert(apiErrorMessage(err));
+    } finally {
+      setSendingSurveyId(null);
+    }
+  }
+
   async function handleEditSubmit(e: FormEvent) {
     e.preventDefault();
     if (!editForm || !editingId) return;
@@ -218,6 +237,7 @@ export default function Supports() {
                 <th>الوصف</th>
                 <th>الحالة</th>
                 <th>التاريخ</th>
+                <th>استبيان الرضا</th>
                 <th></th>
               </tr>
             </thead>
@@ -230,6 +250,21 @@ export default function Supports() {
                   <td>{s.description || "-"}</td>
                   <td>{DISBURSEMENT_STATUS_LABEL[s.status] ?? s.status}</td>
                   <td>{new Date(s.supportDate).toLocaleDateString("ar-SA")}</td>
+                  <td>
+                    {s.surveySentAt ? (
+                      <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                        أُرسل {new Date(s.surveySentAt).toLocaleDateString("ar-SA")}
+                      </span>
+                    ) : (
+                      <button
+                        className="btn secondary small"
+                        disabled={sendingSurveyId === s.id}
+                        onClick={() => sendSurvey(s.id)}
+                      >
+                        {sendingSurveyId === s.id ? "جارٍ الإرسال..." : "إرسال استبيان"}
+                      </button>
+                    )}
+                  </td>
                   <td style={{ display: "flex", gap: 6 }}>
                     <Link to={`/supports/${s.id}/voucher`} className="btn secondary small">
                       سند صرف

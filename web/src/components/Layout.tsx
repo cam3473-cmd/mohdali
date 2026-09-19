@@ -10,6 +10,7 @@ const links = [
   { to: "/courses", label: "الدورات التدريبية" },
   { to: "/reports", label: "التقارير" },
   { to: "/users", label: "المستخدمون" },
+  { to: "/settings", label: "الإعدادات" },
 ];
 
 export default function Layout() {
