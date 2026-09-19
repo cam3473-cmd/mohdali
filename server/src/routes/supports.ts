@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
-import { buildSurveyLink, sendSms, SmsConfigError, SmsSendError } from "../lib/sms";
+import { buildSurveyLink } from "../lib/survey";
 
 export const supportsRouter = Router();
 supportsRouter.use(requireAuth);
@@ -93,44 +93,36 @@ supportsRouter.delete("/:id", async (req, res) => {
   }
 });
 
-const sendSurveySchema = z.object({ supportIds: z.array(z.string().min(1)).min(1) });
-
-// إرسال رسالة نصية فيها رابط استبيان قياس الرضا لكل سجل دعم في القائمة، برقم جوال
-// المستفيد المسجَّل. يُتخطى أي سجل بلا رقم جوال أو مستفيد بلا رقم، ويُعاد تفصيل
-// النتيجة لكل سجل (نجاح/تخطي/فشل) حتى يعرف الموظف من أُرسل له فعلاً.
-supportsRouter.post("/send-survey", async (req, res) => {
-  const parsed = sendSurveySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
-  }
-
+// يُرسل الموظف رسائل الاستبيان يدوياً عبر بوابة منصة الرسائل النصية (حساب مشترك بين عدة
+// جهات، لا يوفّر النظام مفتاح API خاصاً بالجمعية). لذا يكتفي الخادم هنا بإرجاع رابط
+// الاستبيان الشخصي لسجل الدعم مباشرة، ليَنسخه الموظف ويُلصقه في المنصة بنفسه.
+supportsRouter.get("/:id/survey-link", async (req, res) => {
   const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
   if (!settings?.surveyFormBaseUrl) {
     return res.status(400).json({ error: "لم يتم ضبط رابط استبيان قياس الرضا بعد — راجع شاشة الإعدادات" });
   }
-
-  const supports = await prisma.support.findMany({
-    where: { id: { in: parsed.data.supportIds } },
+  const support = await prisma.support.findUnique({
+    where: { id: req.params.id },
     include: { beneficiary: true },
   });
+  if (!support) return res.status(404).json({ error: "السجل غير موجود" });
 
-  const results: { supportId: string; status: "sent" | "skipped" | "failed"; reason?: string }[] = [];
-  for (const support of supports) {
-    if (!support.beneficiary.phone) {
-      results.push({ supportId: support.id, status: "skipped", reason: "لا يوجد رقم جوال مسجَّل لهذا المستفيد" });
-      continue;
-    }
-    try {
-      const link = buildSurveyLink(settings.surveyFormBaseUrl, settings.surveyFormEntryParam, support.beneficiary.id);
-      const message = `شكراً لتواصلكم مع جمعية البر الخيرية بمحافظة السليل، نرجو تقييم تجربتكم: ${link}`;
-      await sendSms(support.beneficiary.phone, message);
-      await prisma.support.update({ where: { id: support.id }, data: { surveySentAt: new Date() } });
-      results.push({ supportId: support.id, status: "sent" });
-    } catch (err) {
-      const reason = err instanceof SmsConfigError || err instanceof SmsSendError ? err.message : "خطأ غير متوقع";
-      results.push({ supportId: support.id, status: "failed", reason });
-    }
+  const link = buildSurveyLink(settings.surveyFormBaseUrl, settings.surveyFormEntryParam, support.beneficiary.id);
+  res.json({ link, phone: support.beneficiary.phone });
+});
+
+const markSurveySentSchema = z.object({ supportIds: z.array(z.string().min(1)).min(1), sent: z.boolean() });
+
+// تمييز سجل دعم كـ "أُرسل له الاستبيان" (أو التراجع عن ذلك) — يدوي بالكامل، بعد أن يرسل
+// الموظف الرسالة فعلياً من بوابة منصة الرسائل، حتى يُعرف من تم تذكيره ومن لا
+supportsRouter.post("/mark-survey-sent", async (req, res) => {
+  const parsed = markSurveySentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
   }
-
-  res.json({ results });
+  await prisma.support.updateMany({
+    where: { id: { in: parsed.data.supportIds } },
+    data: { surveySentAt: parsed.data.sent ? new Date() : null },
+  });
+  res.json({ ok: true });
 });

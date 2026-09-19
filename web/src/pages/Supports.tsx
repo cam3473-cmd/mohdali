@@ -62,23 +62,27 @@ export default function Supports() {
     setEditError("");
   }
 
-  const [sendingSurveyId, setSendingSurveyId] = useState<string | null>(null);
+  const [copyingLinkId, setCopyingLinkId] = useState<string | null>(null);
 
-  async function sendSurvey(id: string) {
-    setSendingSurveyId(id);
+  // ينسخ رابط الاستبيان الشخصي لحافظة الجهاز (ليُلصَق في بوابة منصة الرسائل النصية)،
+  // ويُعلّم السجل كـ"أُرسل" تلقائياً (يمكن التراجع عن التعليم بالضغط مجدداً)
+  async function copySurveyLink(id: string) {
+    setCopyingLinkId(id);
     try {
-      const res = await api.post("/supports/send-survey", { supportIds: [id] });
-      const result = res.data.results[0];
-      if (result.status === "sent") {
-        load();
-      } else {
-        alert(result.reason || "تعذر إرسال الاستبيان");
-      }
+      const res = await api.get(`/supports/${id}/survey-link`);
+      await navigator.clipboard.writeText(res.data.link);
+      await api.post("/supports/mark-survey-sent", { supportIds: [id], sent: true });
+      load();
     } catch (err) {
       alert(apiErrorMessage(err));
     } finally {
-      setSendingSurveyId(null);
+      setCopyingLinkId(null);
     }
+  }
+
+  async function unmarkSurveySent(id: string) {
+    await api.post("/supports/mark-survey-sent", { supportIds: [id], sent: false });
+    load();
   }
 
   async function handleEditSubmit(e: FormEvent) {
@@ -146,6 +150,18 @@ export default function Supports() {
             }
           >
             تصدير Excel
+          </button>
+          <button
+            className="btn secondary"
+            onClick={() =>
+              downloadReport(
+                `/reports/survey-links.xlsx?year=${year}${category ? `&category=${category}` : ""}`,
+                `روابط_استبيان_الرضا_${year}.xlsx`
+              )
+            }
+            title="قائمة بأسماء المستفيدين وجوالاتهم وروابط استبيان مخصّصة لكل واحد، لم يُرسل لهم بعد"
+          >
+            تصدير روابط الاستبيان
           </button>
           <Link to="/batches?new=1" className="btn">
             + إضافة دعم
@@ -252,16 +268,21 @@ export default function Supports() {
                   <td>{new Date(s.supportDate).toLocaleDateString("ar-SA")}</td>
                   <td>
                     {s.surveySentAt ? (
-                      <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                        أُرسل {new Date(s.surveySentAt).toLocaleDateString("ar-SA")}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                          أُرسل {new Date(s.surveySentAt).toLocaleDateString("ar-SA")}
+                        </span>
+                        <button className="btn secondary small" onClick={() => unmarkSurveySent(s.id)}>
+                          تراجع
+                        </button>
+                      </div>
                     ) : (
                       <button
                         className="btn secondary small"
-                        disabled={sendingSurveyId === s.id}
-                        onClick={() => sendSurvey(s.id)}
+                        disabled={copyingLinkId === s.id}
+                        onClick={() => copySurveyLink(s.id)}
                       >
-                        {sendingSurveyId === s.id ? "جارٍ الإرسال..." : "إرسال استبيان"}
+                        {copyingLinkId === s.id ? "جارٍ النسخ..." : "نسخ رابط الاستبيان"}
                       </button>
                     )}
                   </td>

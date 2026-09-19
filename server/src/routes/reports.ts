@@ -2,6 +2,7 @@ import { Router } from "express";
 import ExcelJS from "exceljs";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
+import { buildSurveyLink } from "../lib/survey";
 
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
@@ -203,6 +204,49 @@ reportsRouter.get("/supports.xlsx", async (req, res) => {
   totalRow.font = { bold: true };
   styleHeader(sheet);
   await sendWorkbook(res, workbook, "تقرير_الدعوم.xlsx");
+});
+
+// قائمة روابط استبيان قياس الرضا لكل سجل دعم (رابط شخصي لكل مستفيد)، جاهزة لإرسالها
+// يدوياً عبر بوابة منصة الرسائل النصية — يستثني السجلات التي أُرسل لها الاستبيان مسبقاً
+// إلا إذا طُلب تضمينها صراحةً
+reportsRouter.get("/survey-links.xlsx", async (req, res) => {
+  const { year, category, includeSent } = req.query as Record<string, string>;
+  const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
+  if (!settings?.surveyFormBaseUrl) {
+    return res.status(400).json({ error: "لم يتم ضبط رابط استبيان قياس الرضا بعد — راجع شاشة الإعدادات" });
+  }
+
+  const where: any = {};
+  if (year) where.year = parseInt(year, 10);
+  if (category) where.category = category;
+  if (includeSent !== "1") where.surveySentAt = null;
+
+  const items = await prisma.support.findMany({
+    where,
+    include: { beneficiary: true },
+    orderBy: { beneficiary: { fullName: "asc" } },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("روابط الاستبيان");
+  sheet.columns = [
+    { header: "اسم المستفيد", key: "fullName", width: 26 },
+    { header: "رقم الجوال", key: "phone", width: 16 },
+    { header: "رابط الاستبيان", key: "link", width: 60 },
+    { header: "تاريخ الصرف", key: "supportDate", width: 14 },
+  ];
+  items
+    .filter((s) => s.beneficiary.phone)
+    .forEach((s) => {
+      sheet.addRow({
+        fullName: s.beneficiary.fullName,
+        phone: s.beneficiary.phone,
+        link: buildSurveyLink(settings.surveyFormBaseUrl!, settings.surveyFormEntryParam, s.beneficiary.id),
+        supportDate: s.supportDate.toISOString().slice(0, 10),
+      });
+    });
+  styleHeader(sheet);
+  await sendWorkbook(res, workbook, "روابط_استبيان_الرضا.xlsx");
 });
 
 // تقرير الدورات التدريبية والمستفيدين منها
